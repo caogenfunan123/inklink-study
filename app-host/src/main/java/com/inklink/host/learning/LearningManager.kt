@@ -465,55 +465,6 @@ class LearningManager private constructor(context: Context) {
     fun todaySummary(): Pair<Int, Int> =
         dao.todayMinutes(todayDate()) to dao.todayCoinsSum(todayDate())
 
-    data class DueSummary(val hanzi: Int, val pinyin: Int, val math: Int)
-
-    fun dueSummary(): DueSummary {
-        val now = System.currentTimeMillis()
-        return DueSummary(
-            dao.dueReviewCount(MODULE_HANZI, now),
-            dao.dueReviewCount(MODULE_PINYIN, now),
-            dao.dueReviewCount(MODULE_MATH, now)
-        )
-    }
-
-    data class WrongItem(val module: String, val itemId: String, val wrongCount: Int, val lastTs: Long)
-
-    fun wrongItems(limit: Int = 50): List<WrongItem> =
-        dao.wrongItems(limit).map { WrongItem(it.module, it.itemId, it.wrongCount, it.lastTs) }
-
-    // ---------- 护眼防沉迷 ----------
-
-    /** 单次连续学习上限(分钟)。 */
-    val sessionLimitMin = 20
-    /** 强制休息时长(分钟)。 */
-    val restMin = 5
-    /** 每日总时长上限(分钟)。 */
-    val dailyCapMin = 40
-
-    @Volatile
-    private var sessionStartElapsed = 0L
-
-    fun startSession() {
-        if (sessionStartElapsed == 0L) {
-            sessionStartElapsed = android.os.SystemClock.elapsedRealtime()
-        }
-    }
-
-    fun resetSession() {
-        sessionStartElapsed = 0L
-    }
-
-    /** 阻断原因:null=可学;"REST"=连续超时需休息;"CAP"=今日到量;"NIGHT"=夜间。 */
-    fun guardBlock(): String? {
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        if (hour >= 21 || hour < 6) return "NIGHT"
-        if (dao.todayMinutes(todayDate()) >= dailyCapMin) return "CAP"
-        if (sessionStartElapsed != 0L) {
-            val elapsedMin = (android.os.SystemClock.elapsedRealtime() - sessionStartElapsed) / 60000
-            if (elapsedMin >= sessionLimitMin) return "REST"
-        }
-        return null
-    }
 
     private fun todayDate(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
