@@ -124,8 +124,8 @@ class PoemActivity : AppCompatActivity() {
         cardRead.visibility = View.GONE
         cardQuiz.visibility = View.VISIBLE
 
-        val pool = "春花秋月山水风雪云天日月大小高低远近来去不知白黄青绿红".toCharArray().toTypedArray()
-        val distractors = pool.filter { it.toString() != answer && !line.contains(it) }.shuffled().take(3)
+        val pool = "春花秋月山水风雪云天日月大小高低远近来去不知白黄青绿红".map { it.toString() }
+        val distractors = pool.filter { it != answer && !line.contains(it) }.shuffled().take(3)
         val opts = (listOf(answer) + distractors).shuffled()
         optionButtons.forEachIndexed { i, btn ->
             val text: String = opts.getOrElse(i) { "" }
