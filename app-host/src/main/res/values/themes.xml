@@ -1,0 +1,9 @@
+<resources>
+    <!-- Material3 主题：MaterialCardView / MaterialButton / LinearProgressIndicator
+         等组件强制要求 Material3/MaterialComponents 主题，AppCompat 主题下会直接闪退 -->
+    <style name="Theme.InkLink" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">#3F51B5</item>
+        <item name="android:statusBarColor">#303F9F</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
