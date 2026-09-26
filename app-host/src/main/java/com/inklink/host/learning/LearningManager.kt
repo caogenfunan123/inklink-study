@@ -56,8 +56,8 @@ class LearningManager private constructor(context: Context) {
 
     // ---------- 出题 ----------
 
-    /** 组一关课:优先插 2 个到期复习字,其余取本级未学字随机补齐。返回喂给 WebView 的 JSON。 */
-    fun buildHanziLesson(level: Int, count: Int = 5, reviewOnly: Boolean = false): String {
+    /** 组一关课(原生):优先插 2 个到期复习字,其余取本级未学字随机补齐。 */
+    fun buildHanziEntries(level: Int, count: Int = 5, reviewOnly: Boolean = false): List<HanziEntry> {
         val now = System.currentTimeMillis()
         val lib = hanziLibrary().filter { it.level == level }
         val learned = dao.learnedItemIds(MODULE_HANZI).toSet()
@@ -73,10 +73,7 @@ class LearningManager private constructor(context: Context) {
                     .take(count)
                     .forEach { picked[it.char] = it }
             }
-            return gson.toJson(
-                LessonData(MODULE_HANZI, level, picked.values.toList(),
-                    lib.map { it.char }.filter { it !in picked }.shuffled().take(24))
-            )
+            return picked.values.toList()
         }
         dao.dueReviews(MODULE_HANZI, now, 2)
             .mapNotNull { byChar[it.itemId] }
@@ -86,143 +83,12 @@ class LearningManager private constructor(context: Context) {
             .take(count - picked.size)
             .forEach { picked[it.char] = it }
         if (picked.size < count) {
-            // 本级全学完:从未到期已学字里随机抽,保证关卡可玩
             lib.filter { it.char !in picked }.shuffled()
                 .take(count - picked.size)
                 .forEach { picked[it.char] = it }
         }
-
-        val pool = lib.map { it.char }.filter { it !in picked }.shuffled().take(24)
-        val payload = LessonData(
-            module = MODULE_HANZI, level = level,
-            items = picked.values.toList(), pool = pool
-        )
-        return gson.toJson(payload)
+        return picked.values.toList()
     }
-
-    private data class LessonData(
-        @SerializedName("module") val module: String,
-        @SerializedName("level") val level: Int,
-        @SerializedName("items") val items: List<HanziEntry>,
-        @SerializedName("pool") val pool: List<String>
-    )
-
-    // ---------- 结算 ----------
-
-    data class RewardResult(val coins: Int, val exp: Int, val capped: Boolean, val mastered: Int)
-
-    /** JS finishLesson 回传的结算数据。[chars] 为本关全部字,wrongChars ⊆ chars。 */
-    data class LessonResult(
-        @SerializedName("module") val module: String,
-        @SerializedName("level") val level: Int,
-        @SerializedName("correct") val correct: Int,
-        @SerializedName("total") val total: Int,
-        @SerializedName("durationSec") val durationSec: Int,
-        @SerializedName("chars") val chars: List<String> = emptyList(),
-        @SerializedName("wrongChars") val wrongChars: List<String> = emptyList()
-    )
-
-    /** 对象入口:内部序列化后走统一结算。 */
-    fun finishLesson(result: LessonResult): RewardResult = finishLesson(gson.toJson(result))
-
-    fun finishLesson(resultJson: String): RewardResult {
-        val result = runCatching {
-            gson.fromJson(resultJson, LessonResult::class.java)
-        }.getOrNull() ?: return RewardResult(0, 0, capped = false, mastered = 0)
-
-        val rate = if (result.total > 0) result.correct.toDouble() / result.total else 0.0
-        val coinsBase = 5 + (10 * rate).roundToInt()      // 5-15
-        val exp = 10 + (25 * rate).roundToInt()           // 10-35
-        val today = todayDate()
-
-        val coinsGranted = run {
-            val used = dao.todayCoinsSum(today)
-            val allowance = (DAILY_COIN_CAP - used).coerceAtLeast(0)
-            val granted = coinsBase.coerceAtMost(allowance)
-            granted
-        }
-        val capped = coinsGranted < coinsBase
-
-        // 宠物入账(唯一入口,联动升级/事件日志/礼花)
-        if (coinsGranted > 0 || exp > 0) {
-            PetStateManager(appContext).addReward(coinsGranted, exp)
-        }
-
-        // 进度与复习调度:只结算本关出现过的字(chars),错字优先处理
-        val now = System.currentTimeMillis()
-        var mastered = 0
-        val existing = dao.allProgress(result.module).associateBy { it.itemId }
-        fun upsertItem(char: String, wasCorrect: Boolean) {
-            val row = existing[char] ?: LearnProgressRow(
-                module = result.module, itemId = char, level = result.level
-            )
-            if (wasCorrect) {
-                row.correctCount++
-                if (row.reviewStage < REVIEW_INTERVAL_DAYS.size) {
-                    row.reviewStage++
-                }
-                if (row.reviewStage >= REVIEW_INTERVAL_DAYS.size) {
-                    row.status = "MASTERED"
-                    mastered++
-                    row.nextReviewTs = 0
-                } else {
-                    row.nextReviewTs = now + REVIEW_INTERVAL_DAYS[row.reviewStage] * DAY_MS
-                }
-            } else {
-                row.wrongCount++
-                row.reviewStage = 0
-                row.status = "LEARNING"
-                row.nextReviewTs = now + DAY_MS
-            }
-            row.lastTs = now
-            dao.upsertProgress(row)
-        }
-        val wrong = result.wrongChars.toSet()
-        result.chars.forEach { char -> upsertItem(char, wasCorrect = char !in wrong) }
-        result.wrongChars.forEach {
-            dao.insertWrong(WrongBookRow(module = result.module, itemId = it))
-        }
-
-        // 日统计
-        val key = DailyStatsRow(date = today, module = result.module)
-        val daily = dao.dailyRow(today, result.module) ?: key
-        daily.minutes += result.durationSec / 60
-        daily.itemsDone += result.total
-        daily.correctSum += result.correct
-        daily.coinsEarned += coinsGranted
-        daily.expEarned += exp
-        dao.upsertDaily(daily)
-
-        reportProgress(result, rate)
-
-        return RewardResult(coinsGranted, exp, capped, mastered)
-    }
-
-    private fun reportProgress(result: LessonResult, rate: Double) {
-        runCatching {
-            val app = appContext as InkHostApplication
-            val payload = LearnProgressPayload(
-                scope = "LESSON",
-                module = result.module,
-                level = result.level,
-                itemsDone = result.total,
-                correctRate = "%.2f".format(Locale.US, rate).toDouble(),
-                minutesToday = dao.todayMinutes(todayDate()),
-                coinsToday = dao.todayCoinsSum(todayDate()),
-                weakTop5 = result.wrongChars.take(5)
-            )
-            app.transportManager.sendMessage(
-                com.inklink.common.protocol.InkMessage.text(
-                    MessageType.LEARN_PROGRESS, gson.toJson(payload), from = app.deviceId
-                )
-            )
-        }
-    }
-
-    fun dueReviewCount(): Int = dao.dueReviewCount(MODULE_HANZI, System.currentTimeMillis())
-
-    fun todaySummary(): Pair<Int, Int> =
-        dao.todayMinutes(todayDate()) to dao.todayCoinsSum(todayDate())
 
     // ==================== M2:拼音 / 古诗 / 口算 / 复习 / 护眼 ====================
 
@@ -240,8 +106,8 @@ class LearningManager private constructor(context: Context) {
         @SerializedName("image") val image: String? = null
     )
 
-    /** 拼音一关:6 张字母卡(声母/韵母/整体认读混抽) + 4 道声调配对题。 */
-    fun buildPinyinLesson(level: Int, reviewOnly: Boolean = false): String {
+    /** 拼音一关(原生):6 张字母卡(声母/韵母/整体认读混抽) + 4 道声调配对题。 */
+    fun buildPinyinData(level: Int, reviewOnly: Boolean = false): Pair<List<PinyinLetter>, List<PinyinQuestion>> {
         val all = pinyinLibrary()
         val learned = dao.learnedItemIds(MODULE_PINYIN).toSet()
         val due = dao.dueReviews(MODULE_PINYIN, System.currentTimeMillis(), 6).map { it.itemId }.toSet()
@@ -258,17 +124,8 @@ class LearningManager private constructor(context: Context) {
             if (l.proxyChar.isNullOrBlank()) l.copy(proxyChar = proxyCharFor(l)) else l
         }
         val questions = pinyinQuestions().shuffled().take(4)
-        val pool = all.map { it.pinyin }.shuffled().take(20)
-        return gson.toJson(LessonDataPin(MODULE_PINYIN, level, letters, questions, pool))
+        return letters to questions
     }
-
-    private data class LessonDataPin(
-        @SerializedName("module") val module: String,
-        @SerializedName("level") val level: Int,
-        @SerializedName("letters") val letters: List<PinyinLetter>,
-        @SerializedName("questions") val questions: List<PinyinQuestion>,
-        @SerializedName("pool") val pool: List<String>
-    )
 
     @Volatile
     private var pinyinCache: List<PinyinLetter>? = null
@@ -366,18 +223,11 @@ class LearningManager private constructor(context: Context) {
         }
     }
 
-    /** 古诗一关:本级抽 3 首(朗读 + 背诵填空)。 */
-    fun buildPoemLesson(level: Int): String {
+    /** 古诗一关(原生):本级抽 3 首(朗读 + 背诵填空)。 */
+    fun buildPoems(level: Int, count: Int = 3): List<Poem> {
         val pool = poemLibrary().filter { it.level == level }.ifEmpty { poemLibrary() }
-        val poems = pool.shuffled().take(3)
-        return gson.toJson(LessonDataPoem(MODULE_POEM, level, poems))
+        return pool.shuffled().take(count)
     }
-
-    private data class LessonDataPoem(
-        @SerializedName("module") val module: String,
-        @SerializedName("level") val level: Int,
-        @SerializedName("poems") val poems: List<Poem>
-    )
 
     // ---------- 口算(原生) ----------
 

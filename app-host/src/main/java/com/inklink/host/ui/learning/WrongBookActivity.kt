@@ -40,14 +40,31 @@ class WrongBookActivity : AppCompatActivity() {
             card.findViewById<TextView>(R.id.tvWrongItem).text =
                 "[$label] ${item.itemId} · 错 ${item.wrongCount} 次"
             card.findViewById<TextView>(R.id.btnWrongReview).setOnClickListener {
+                if (!guardPass()) return@setOnClickListener
+                val target = when (item.module) {
+                    LearningManager.MODULE_PINYIN -> PinyinActivity::class.java
+                    LearningManager.MODULE_MATH -> MathActivity::class.java
+                    LearningManager.MODULE_POEM -> PoemActivity::class.java
+                    else -> HanziActivity::class.java
+                }
                 startActivity(
-                    Intent(this, LessonActivity::class.java)
-                        .putExtra(LessonActivity.EXTRA_MODULE, item.module)
-                        .putExtra(LessonActivity.EXTRA_LEVEL, 2)
-                        .putExtra(LessonActivity.EXTRA_REVIEW, true)
+                    Intent(this, target)
+                        .putExtra(LessonRouter.EXTRA_LEVEL, 2)
+                        .putExtra(LessonRouter.EXTRA_REVIEW, true)
                 )
             }
             container.addView(card)
         }
+    }
+    /** 复习同样受护眼规则约束。 */
+    private fun guardPass(): Boolean {
+        val block = LearningManager.get(applicationContext).guardBlock()
+        if (block == null) return true
+        Toast.makeText(this, if (block == "NIGHT") "夜深啦,明天再复习吧!" else "今天的学习时间用完啦!", Toast.LENGTH_LONG).show()
+        return false
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
     }
 }

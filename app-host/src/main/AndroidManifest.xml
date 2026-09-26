@@ -81,7 +81,17 @@
             android:screenOrientation="portrait" />
 
         <activity
-            android:name=".ui.learning.LessonActivity"
+            android:name=".ui.learning.HanziActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".ui.learning.PinyinActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".ui.learning.PoemActivity"
             android:exported="false"
             android:screenOrientation="portrait" />
 

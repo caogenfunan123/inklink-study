@@ -41,7 +41,7 @@ class MathActivity : AppCompatActivity() {
         setContentView(R.layout.activity_math)
         sfx = SoundEffectManager(this)
 
-        val level = intent.getIntExtra(LessonActivity.EXTRA_LEVEL, 2)
+        val level = intent.getIntExtra(LessonRouter.EXTRA_LEVEL, 2)
         questions = LearningManager.get(applicationContext).generateMathQuestions(level)
         startTs = System.currentTimeMillis()
 
@@ -108,7 +108,7 @@ class MathActivity : AppCompatActivity() {
         val reward = LearningManager.get(applicationContext).finishLesson(
             LearningManager.LessonResult(
                 module = LearningManager.MODULE_MATH,
-                level = intent.getIntExtra(LessonActivity.EXTRA_LEVEL, 2),
+                level = intent.getIntExtra(LessonRouter.EXTRA_LEVEL, 2),
                 correct = correct,
                 total = total,
                 durationSec = ((System.currentTimeMillis() - startTs) / 1000).toInt(),

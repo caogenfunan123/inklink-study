@@ -81,11 +81,15 @@ class LearningHubActivity : AppCompatActivity() {
 
     private fun openLesson(module: String, review: Boolean = false) {
         if (!guardPass()) return
+        val target = when (module) {
+            LessonRouter.MODULE_PINYIN -> PinyinActivity::class.java
+            LessonRouter.MODULE_POEM -> PoemActivity::class.java
+            else -> HanziActivity::class.java
+        }
         startActivity(
-            Intent(this, LessonActivity::class.java)
-                .putExtra(LessonActivity.EXTRA_MODULE, module)
-                .putExtra(LessonActivity.EXTRA_LEVEL, selectedLevel)
-                .putExtra(LessonActivity.EXTRA_REVIEW, review)
+            Intent(this, target)
+                .putExtra(LessonRouter.EXTRA_LEVEL, selectedLevel)
+                .putExtra(LessonRouter.EXTRA_REVIEW, review)
         )
     }
 
@@ -93,7 +97,7 @@ class LearningHubActivity : AppCompatActivity() {
         if (!guardPass()) return
         startActivity(
             Intent(this, MathActivity::class.java)
-                .putExtra(LessonActivity.EXTRA_LEVEL, selectedLevel)
+                .putExtra(LessonRouter.EXTRA_LEVEL, selectedLevel)
         )
     }
 

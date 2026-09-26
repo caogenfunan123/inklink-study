@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/tvPoemProgress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="古诗亭 · 1/3"
+        android:textColor="#FFD54F"
+        android:textSize="16sp" />
+
+    <!-- 朗读卡 -->
+    <LinearLayout
+        android:id="@+id/poemReadCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="#1C1A17"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:id="@+id/tvPoemTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="《江南》"
+            android:textColor="#FFD54F"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tvPoemBy"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="汉 · 汉乐府"
+            android:textColor="#BCAAA4"
+            android:textSize="13sp" />
+
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="10dp"
+            android:layout_weight="1">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_horizontal"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tvPoemLines"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:lineSpacingExtra="8dp"
+                    android:text="江南可采莲"
+                    android:textColor="#FFFFFF"
+                    android:textSize="21sp" />
+
+                <TextView
+                    android:id="@+id/tvPoemTrans"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:lineSpacingExtra="4dp"
+                    android:text="译文"
+                    android:textColor="#9E9E9E"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnPoemRead"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="🔊 一起读" />
+
+    <!-- 背诵填空卡 -->
+    <LinearLayout
+        android:id="@+id/poemQuizCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="#1C1A17"
+        android:gravity="center_horizontal"
+        android:orientation="vertical"
+        android:padding="20dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="背一背:空缺处是哪个字?"
+            android:textColor="#BCAAA4"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tvPoemQuizLine"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:lineSpacingExtra="8dp"
+            android:text="江南可采○"
+            android:textColor="#FFFFFF"
+            android:textSize="24sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/poemOptions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTmOpt1"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:textSize="24sp"
+                android:textColor="#212121" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTmOpt2"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:textSize="24sp"
+                android:textColor="#212121" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTmOpt3"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:textSize="24sp"
+                android:textColor="#212121" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTmOpt4"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:textSize="24sp"
+                android:textColor="#212121" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnPoemRecite"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:backgroundTint="#8D6E63"
+        android:paddingStart="30dp"
+        android:paddingEnd="30dp"
+        android:text="我会背了 →"
+        android:textColor="#FFFFFF"
+        android:textSize="17sp" />
+
+    <TextView
+        android:id="@+id/tvPoemError"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:textColor="#FF8A80"
+        android:textSize="13sp"
+        android:visibility="gone" />
+</LinearLayout>
