@@ -44,28 +44,61 @@ class LessonActivity : AppCompatActivity() {
                 // 阻断一切外链(零服务器铁律)
                 return !url.startsWith("file:///android_asset/")
             }
+
+            override fun onPageFinished(view: WebView, url: String) {
+                // 原生主动推送课程数据(不依赖 JS 反向拉取,杜绝"一直加载中")
+                pushLessonData()
+            }
         }
         webView.addJavascriptInterface(Bridge(), "InkBridge")
-        webView.loadUrl("file:///android_asset/learning/index.html")
+        val module = intent.getStringExtra(EXTRA_MODULE) ?: MODULE_HANZI
+        val page = when (module) {
+            LearningManager.MODULE_PINYIN -> "pinyin.html"
+            LearningManager.MODULE_POEM -> "poem.html"
+            else -> "index.html"
+        }
+        webView.loadUrl("file:///android_asset/learning/$page")
     }
+
+    private fun pushLessonData() {
+        val module = intent.getStringExtra(EXTRA_MODULE) ?: MODULE_HANZI
+        val level = intent.getIntExtra(EXTRA_LEVEL, 2)
+        val reviewOnly = intent.getBooleanExtra(EXTRA_REVIEW, false)
+        runOnUiThread {
+            runCatching {
+                val mgr = LearningManager.get(applicationContext)
+                val json = when (module) {
+                    LearningManager.MODULE_PINYIN -> mgr.buildPinyinLesson(level, reviewOnly)
+                    LearningManager.MODULE_POEM -> mgr.buildPoemLesson(level)
+                    else -> mgr.buildHanziLesson(level, reviewOnly = reviewOnly)
+                }
+                webView.evaluateJavascript("window.onLessonData && window.onLessonData($json)", null)
+            }.onFailure { e ->
+                webView.evaluateJavascript(
+                    "window.onLessonError && window.onLessonError(${jsonErr(e.message)})",
+                    null
+                )
+            }
+        }
+    }
+
+    private fun jsonErr(msg: String?): String =
+        "\"" + (msg ?: "未知错误").replace("\"", "'").replace("\n", " ") + "\""
+
 
     inner class Bridge {
 
-        /** 页面启动时索取课程数据 → 回调 window.onLessonData(json) */
+        /** JS 拉取兜底(主推送在 onPageFinished) */
         @JavascriptInterface
         fun getLessonData() {
-            val level = intent.getIntExtra(EXTRA_LEVEL, 2)
-            val json = LearningManager.get(applicationContext).buildHanziLesson(level)
-            runOnUiThread {
-                webView.evaluateJavascript("window.onLessonData($json)", null)
-            }
+            pushLessonData()
         }
 
         /** 朗读(解决 WebView 无 speechSynthesis 的坑) */
         @JavascriptInterface
         fun speak(text: String) {
             runOnUiThread {
-                PetTtsGate.get(applicationContext).speak(text)
+                runCatching { PetTtsGate.get(applicationContext).speak(text) }
             }
         }
 
@@ -110,5 +143,8 @@ class LessonActivity : AppCompatActivity() {
 
     companion object {
         const val EXTRA_LEVEL = "extra_level"
+        const val EXTRA_MODULE = "extra_module"
+        const val EXTRA_REVIEW = "extra_review"
+        const val MODULE_HANZI = "HANZI"
     }
 }

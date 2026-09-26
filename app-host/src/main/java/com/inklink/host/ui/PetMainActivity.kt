@@ -86,6 +86,8 @@ class PetMainActivity : AppCompatActivity() {
     private lateinit var btnChat: MaterialButton
     private lateinit var btnAdmin: MaterialButton
     private lateinit var btnLearningHub: MaterialButton
+    private lateinit var bannerLearning: View
+    private lateinit var tvBannerStudy: TextView
     private lateinit var btnDiary: MaterialButton
     private lateinit var btnAchieve: MaterialButton
     private lateinit var btnFamily: MaterialButton
@@ -228,6 +230,12 @@ class PetMainActivity : AppCompatActivity() {
         btnChat = findViewById(R.id.btnChat)
         btnAdmin = findViewById(R.id.btnAdmin)
         btnLearningHub = findViewById(R.id.btnLearningHub)
+        bannerLearning = findViewById(R.id.bannerLearning)
+        tvBannerStudy = findViewById(R.id.tvBannerStudy)
+        runCatching {
+            val (m, _) = com.inklink.host.learning.LearningManager.get(this).todaySummary()
+            tvBannerStudy.text = "识字 · 拼音 · 口算 · 古诗 | 今天 $m 分钟"
+        }
         btnDiary = findViewById(R.id.btnDiary)
         btnAchieve = findViewById(R.id.btnAchieve)
         btnFamily = findViewById(R.id.btnFamily)
@@ -515,6 +523,13 @@ class PetMainActivity : AppCompatActivity() {
         btnChat.setOnLongClickListener {
             speakGuide("聊天：和爸爸妈妈发消息。")
             true
+        }
+
+        // 学习乐园一级横幅(与宠物并列)
+        bannerLearning.setOnClickListener {
+            HapticUtil.tap(it)
+            speakGuide("学习乐园：上课赚金币，喂饱小宠物。")
+            startActivity(Intent(this, com.inklink.host.ui.learning.LearningHubActivity::class.java))
         }
 
         // 学习乐园(M1 识字屋):学习赚金币 → PetStateManager.addReward 统一入账

@@ -25,6 +25,9 @@ interface LearnDao {
     @Query("SELECT COUNT(*) FROM learn_progress WHERE module = :module AND nextReviewTs <= :now AND status != 'MASTERED'")
     fun dueReviewCount(module: String, now: Long): Int
 
+    @Query("SELECT * FROM learn_progress WHERE wrongCount > 0 ORDER BY lastTs DESC LIMIT :limit")
+    fun wrongItems(limit: Int): List<LearnProgressRow>
+
     // ---------- wrong_book ----------
 
     @Insert

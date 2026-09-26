@@ -280,12 +280,20 @@ el("btnHome").onclick = function () {
   var b = bridge(); if (b) b.closeLesson();
 };
 
-/* 启动:向原生要课程数据 */
+/* 错误可见化:原生侧异常直接显示,不再无限转圈 */
+window.onLessonError = function (msg) {
+  el("loading").textContent = "出错了:" + msg + "(点击屏幕重试)";
+  el("loading").onclick = function () { location.reload(); };
+};
+
+/* 启动:主推送在原生 onPageFinished;800ms 兜底再拉一次 */
 setTimeout(function () {
-  var b = bridge();
-  if (b && b.getLessonData) b.getLessonData();
-  else { el("loading").textContent = "桥接不可用"; }
-}, 300);
+  if (!LESSON) {
+    var b = bridge();
+    if (b && b.getLessonData) b.getLessonData();
+    else { el("loading").textContent = "桥接不可用(点击重试)"; el("loading").onclick = function () { location.reload(); }; }
+  }
+}, 800);
 </script>
 </body>
 </html>

@@ -177,6 +177,66 @@
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
+    <!-- 学习乐园一级入口(与宠物并列) -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/bannerLearning"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_marginEnd="12dp"
+        android:layout_marginTop="6dp"
+        android:backgroundTint="#263238"
+        app:cardCornerRadius="18dp"
+        app:layout_constraintTop_toBottomOf="@id/hudCard"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📚"
+                android:textSize="26sp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="学习乐园"
+                    android:textColor="#FFFFFF"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvBannerStudy"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="识字 · 拼音 · 口算 · 古诗"
+                    android:textColor="#9E9E9E"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="▶"
+                android:textColor="#FFD54F"
+                android:textSize="18sp" />
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
+
     <!-- 居中宠物渲染视图（视觉重心，占屏约 45%） -->
     <com.inklink.host.ui.view.PetSpriteView
         android:id="@+id/petSpriteView"
@@ -184,8 +244,8 @@
         android:layout_height="0dp"
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
-        app:layout_constraintHeight_percent="0.42"
-        app:layout_constraintTop_toBottomOf="@id/hudCard"
+        app:layout_constraintHeight_percent="0.38"
+        app:layout_constraintTop_toBottomOf="@id/bannerLearning"
         app:layout_constraintBottom_toTopOf="@id/bottomDock"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#121212"
+    android:gravity="center_horizontal"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/tvMathProgress"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text="口算商店 · 1/10"
+        android:textColor="#FFD54F"
+        android:textSize="16sp" />
+
+    <TextView
+        android:id="@+id/tvMathQuestion"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="28dp"
+        android:text="3 + 5 = ?"
+        android:textColor="#FFFFFF"
+        android:textSize="44sp"
+        android:textStyle="bold" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnMathSpeak"
+        style="@style/Widget.Material3.Button.TonalButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="🔊 再听一遍" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpt1"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:text="7"
+                android:textColor="#212121"
+                android:textSize="26sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpt2"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:text="8"
+                android:textColor="#212121"
+                android:textSize="26sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpt3"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:text="9"
+                android:textColor="#212121"
+                android:textSize="26sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnOpt4"
+                android:layout_width="0dp"
+                android:layout_height="72dp"
+                android:layout_margin="6dp"
+                android:layout_weight="1"
+                android:backgroundTint="#FFFFFF"
+                android:text="6"
+                android:textColor="#212121"
+                android:textSize="26sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <Space
+        android:layout_width="1dp"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text="答对赚金币,答错进错题本"
+        android:textColor="#616161"
+        android:textSize="11sp" />
+</LinearLayout>

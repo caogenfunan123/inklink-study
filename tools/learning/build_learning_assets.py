@@ -85,6 +85,8 @@ def ts_to_json(segment):
             if c == in_str:
                 out.append('"')
                 in_str = ""
+            elif in_str == "'" and c == '"':
+                out.append('\\"')  # 单引号串内的双引号需转义
             else:
                 out.append(c)
         else:
@@ -228,6 +230,50 @@ def main():
     pairs = extract_block(q, "export const pinyinCharPairs")
     check(len(pairs) == 250, "拼音配对题=%d (源文件实测250)" % len(pairs))
     json.dump(pairs, open(os.path.join(OUT, "pinyin_questions.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, separators=(",", ":"))
+
+    # 声母(23)/韵母(24)字母卡:joye initials.ts / vowels.ts 各分类块合并
+    ini = open(os.path.join(REF_JOYE, "src", "data", "pinyin", "initials.ts"), encoding="utf-8").read()
+    vow = open(os.path.join(REF_JOYE, "src", "data", "pinyin", "vowels.ts"), encoding="utf-8").read()
+    initials, vowels = [], []
+    for m in re.finditer(r"export const (\w+): PinyinItem\[\] =", ini):
+        initials += extract_block(ini, m.group(0))
+    for m in re.finditer(r"export const (\w+): PinyinItem\[\] =", vow):
+        vowels += extract_block(vow, m.group(0))
+    check(len(initials) == 23, "声母=%d (期望23)" % len(initials))
+    check(len(vowels) == 24, "韵母=%d (期望24)" % len(vowels))
+    pinyin["initials"] = initials
+    pinyin["vowels"] = vowels
+    json.dump(pinyin, open(os.path.join(OUT, "pinyin.json"), "w", encoding="utf-8"),
+              ensure_ascii=False, separators=(",", ":"))
+
+    # 古诗(poem/data.js: title/author/dynasty/id/lines/pinyins/trans/anno),按正文长度分级
+    praw = open(os.path.join(REF_HANZI, "poem", "data.js"), encoding="utf-8").read()
+    arr_start = praw.find("[")
+    arr_end = find_balanced(praw, arr_start)
+    poem_groups = json.loads(ts_to_json(praw[arr_start:arr_end + 1]))
+    poems = []
+    for group in poem_groups:
+        for pm in group:
+            lines = pm.get("lines") or []
+            body_len = sum(len(l) for l in lines)
+            poems.append({
+                "id": pm.get("id", ""),
+                "title": pm.get("title", ""),
+                "author": pm.get("author", ""),
+                "dynasty": pm.get("dynasty", ""),
+                "lines": lines,
+                "pinyins": pm.get("pinyins") or [],
+                "trans": (pm.get("trans") or [""])[0],
+                "level": 1 if body_len <= 48 else (2 if body_len <= 96 else 3),
+            })
+    poems = [pm for pm in poems if pm["title"] and pm["lines"]]
+    lv = {}
+    for pm in poems:
+        lv[pm["level"]] = lv.get(pm["level"], 0) + 1
+    print("  古诗分级分布: %s" % sorted(lv.items()))
+    check(len(poems) >= 100, "古诗=%d (期望>=100)" % len(poems))
+    json.dump(poems, open(os.path.join(OUT, "poems.json"), "w", encoding="utf-8"),
               ensure_ascii=False, separators=(",", ":"))
 
     # ---------- 3. 英语(joye words/SentencesPage) ----------

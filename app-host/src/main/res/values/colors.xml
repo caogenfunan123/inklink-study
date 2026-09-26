@@ -1,0 +1,3 @@
+<resources>    <color name="math_correct">#43A047</color>
+    <color name="math_wrong">#B71C1C</color>
+</resources>
