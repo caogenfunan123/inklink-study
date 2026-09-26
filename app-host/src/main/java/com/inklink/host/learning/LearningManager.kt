@@ -355,6 +355,166 @@ class LearningManager private constructor(context: Context) {
         return null
     }
 
+    // ---------- 结算与上报 ----------
+
+    data class RewardResult(val coins: Int, val exp: Int, val capped: Boolean, val mastered: Int)
+
+    /** JS/原生共用的结算数据。[chars] 为本关全部知识点,wrongChars ⊆ chars。 */
+    data class LessonResult(
+        @SerializedName("module") val module: String,
+        @SerializedName("level") val level: Int,
+        @SerializedName("correct") val correct: Int,
+        @SerializedName("total") val total: Int,
+        @SerializedName("durationSec") val durationSec: Int,
+        @SerializedName("chars") val chars: List<String> = emptyList(),
+        @SerializedName("wrongChars") val wrongChars: List<String> = emptyList()
+    )
+
+    /** 对象入口:内部序列化后走统一结算。 */
+    fun finishLesson(result: LessonResult): RewardResult = finishLesson(gson.toJson(result))
+
+    fun finishLesson(resultJson: String): RewardResult {
+        val result = runCatching {
+            gson.fromJson(resultJson, LessonResult::class.java)
+        }.getOrNull() ?: return RewardResult(0, 0, capped = false, mastered = 0)
+
+        val rate = if (result.total > 0) result.correct.toDouble() / result.total else 0.0
+        val coinsBase = 5 + (10 * rate).roundToInt()      // 5-15
+        val exp = 10 + (25 * rate).roundToInt()           // 10-35
+        val today = todayDate()
+
+        val coinsGranted = run {
+            val used = dao.todayCoinsSum(today)
+            val allowance = (DAILY_COIN_CAP - used).coerceAtLeast(0)
+            coinsBase.coerceAtMost(allowance)
+        }
+        val capped = coinsGranted < coinsBase
+
+        // 宠物入账(唯一入口,联动升级/事件日志/礼花)
+        if (coinsGranted > 0 || exp > 0) {
+            PetStateManager(appContext).addReward(coinsGranted, exp)
+        }
+
+        // 进度与复习调度:只结算本关出现过的知识点
+        val now = System.currentTimeMillis()
+        var mastered = 0
+        val existing = dao.allProgress(result.module).associateBy { it.itemId }
+        fun upsertItem(itemId: String, wasCorrect: Boolean) {
+            val row = existing[itemId] ?: LearnProgressRow(
+                module = result.module, itemId = itemId, level = result.level
+            )
+            if (wasCorrect) {
+                row.correctCount++
+                if (row.reviewStage < REVIEW_INTERVAL_DAYS.size) row.reviewStage++
+                if (row.reviewStage >= REVIEW_INTERVAL_DAYS.size) {
+                    row.status = "MASTERED"
+                    mastered++
+                    row.nextReviewTs = 0
+                } else {
+                    row.nextReviewTs = now + REVIEW_INTERVAL_DAYS[row.reviewStage] * DAY_MS
+                }
+            } else {
+                row.wrongCount++
+                row.reviewStage = 0
+                row.status = "LEARNING"
+                row.nextReviewTs = now + DAY_MS
+            }
+            row.lastTs = now
+            dao.upsertProgress(row)
+        }
+        val wrong = result.wrongChars.toSet()
+        result.chars.forEach { itemId -> upsertItem(itemId, wasCorrect = itemId !in wrong) }
+        result.wrongChars.forEach { dao.insertWrong(WrongBookRow(module = result.module, itemId = it)) }
+
+        // 日统计
+        val daily = dao.dailyRow(today, result.module) ?: DailyStatsRow(date = today, module = result.module)
+        daily.minutes += result.durationSec / 60
+        daily.itemsDone += result.total
+        daily.correctSum += result.correct
+        daily.coinsEarned += coinsGranted
+        daily.expEarned += exp
+        dao.upsertDaily(daily)
+
+        reportProgress(result, rate)
+        return RewardResult(coinsGranted, exp, capped, mastered)
+    }
+
+    private fun reportProgress(result: LessonResult, rate: Double) {
+        runCatching {
+            val app = appContext as InkHostApplication
+            val payload = LearnProgressPayload(
+                scope = "LESSON",
+                module = result.module,
+                level = result.level,
+                itemsDone = result.total,
+                correctRate = "%.2f".format(Locale.US, rate).toDouble(),
+                minutesToday = dao.todayMinutes(todayDate()),
+                coinsToday = dao.todayCoinsSum(todayDate()),
+                weakTop5 = result.wrongChars.take(5)
+            )
+            app.transportManager.sendMessage(
+                com.inklink.common.protocol.InkMessage.text(
+                    MessageType.LEARN_PROGRESS, gson.toJson(payload), from = app.deviceId
+                )
+            )
+        }
+    }
+
+    fun dueReviewCount(): Int = dao.dueReviewCount(MODULE_HANZI, System.currentTimeMillis())
+
+    fun todaySummary(): Pair<Int, Int> =
+        dao.todayMinutes(todayDate()) to dao.todayCoinsSum(todayDate())
+
+    data class DueSummary(val hanzi: Int, val pinyin: Int, val math: Int)
+
+    fun dueSummary(): DueSummary {
+        val now = System.currentTimeMillis()
+        return DueSummary(
+            dao.dueReviewCount(MODULE_HANZI, now),
+            dao.dueReviewCount(MODULE_PINYIN, now),
+            dao.dueReviewCount(MODULE_MATH, now)
+        )
+    }
+
+    data class WrongItem(val module: String, val itemId: String, val wrongCount: Int, val lastTs: Long)
+
+    fun wrongItems(limit: Int = 50): List<WrongItem> =
+        dao.wrongItems(limit).map { WrongItem(it.module, it.itemId, it.wrongCount, it.lastTs) }
+
+    // ---------- 护眼防沉迷 ----------
+
+    /** 单次连续学习上限(分钟)。 */
+    val sessionLimitMin = 20
+    /** 强制休息时长(分钟)。 */
+    val restMin = 5
+    /** 每日总时长上限(分钟)。 */
+    val dailyCapMin = 40
+
+    @Volatile
+    private var sessionStartElapsed = 0L
+
+    fun startSession() {
+        if (sessionStartElapsed == 0L) {
+            sessionStartElapsed = android.os.SystemClock.elapsedRealtime()
+        }
+    }
+
+    fun resetSession() {
+        sessionStartElapsed = 0L
+    }
+
+    /** 阻断原因:null=可学;"REST"=连续超时需休息;"CAP"=今日到量;"NIGHT"=夜间。 */
+    fun guardBlock(): String? {
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        if (hour >= 21 || hour < 6) return "NIGHT"
+        if (dao.todayMinutes(todayDate()) >= dailyCapMin) return "CAP"
+        if (sessionStartElapsed != 0L) {
+            val elapsedMin = (android.os.SystemClock.elapsedRealtime() - sessionStartElapsed) / 60000
+            if (elapsedMin >= sessionLimitMin) return "REST"
+        }
+        return null
+    }
+
     private fun todayDate(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
