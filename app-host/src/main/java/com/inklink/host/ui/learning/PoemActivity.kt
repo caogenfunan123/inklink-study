@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
 import com.inklink.host.R
 import com.inklink.host.audio.PetTtsGate
+import com.inklink.host.util.SoundEffectManager
 import com.inklink.host.learning.LearningManager
 import com.inklink.host.learning.LearningManager.Poem
 
@@ -128,11 +129,11 @@ class PoemActivity : AppCompatActivity() {
         val opts = (listOf(answer) + distractors).shuffled()
         optionButtons.forEachIndexed { i, btn ->
             val text = opts.getOrNull(i) ?: ""
-            btn.text = text
+            btn.text = text ?: ""
             btn.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.white)
             btn.isEnabled = true
             btn.setOnClickListener {
-                if (text.isEmpty()) return@setOnClickListener
+                if (text.isNullOrEmpty()) return@setOnClickListener
                 quizCount++
                 if (text == answer) {
                     correct++

@@ -92,17 +92,17 @@ class HanziActivity : AppCompatActivity() {
     private fun render() {
         if (idx >= items.size) { finishLesson(); return }
         answered = false
-        val it = items[idx]
+        val entry = items[idx]
         tvProgress.text = "识字屋 · $idx/${items.size} · ⭐ $correct"
-        tvChar.text = it.char
-        tvPinyin.text = it.pinyin
-        tvPhrase.text = if (it.phrase.isBlank()) "" else "词语:${it.phrase}"
-        tvSentence.text = it.sentence
+        tvChar.text = entry.char
+        tvPinyin.text = entry.pinyin
+        tvPhrase.text = if (entry.phrase.isBlank()) "" else "词语:${entry.phrase}"
+        tvSentence.text = entry.sentence
         // 干扰字从同级字库随机,排除正确字与重复
         val distractors = LearningManager.get(applicationContext).hanziLibrary()
-            .filter { h -> h.level == it.level && h.char != it.char }
+            .filter { h -> h.level == entry.level && h.char != entry.char }
             .shuffled().take(3).map { h -> h.char }
-        val opts = (listOf(it.char) + distractors).shuffled()
+        val opts = (listOf(entry.char) + distractors).shuffled()
         optionButtons.forEachIndexed { i, btn ->
             val text = opts.getOrNull(i) ?: ""
             btn.text = text
@@ -112,19 +112,19 @@ class HanziActivity : AppCompatActivity() {
             btn.setOnClickListener {
                 if (answered) return@setOnClickListener
                 answered = true
-                if (text == it.char) {
+                if (text == entry.char) {
                     correct++
                     btn.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_correct)
                     sfx.play(SoundEffectManager.Sfx.COIN)
-                    PetTtsGate.get(applicationContext).speak("答对啦,${it.char}")
+                    PetTtsGate.get(applicationContext).speak("答对啦,${entry.char}")
                     idx++
                     handler.postDelayed({ render() }, 1100)
                 } else {
-                    wrongChars.add(it.char)
+                    wrongChars.add(entry.char)
                     btn.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_wrong)
                     btn.isEnabled = false
                     sfx.play(SoundEffectManager.Sfx.GROAN)
-                    PetTtsGate.get(applicationContext).speak("再看一看,这是${it.char}")
+                    PetTtsGate.get(applicationContext).speak("再看一看,这是${entry.char}")
                 }
             }
         }

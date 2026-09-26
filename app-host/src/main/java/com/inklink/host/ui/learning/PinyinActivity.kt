@@ -6,6 +6,7 @@ import android.os.Looper
 import android.view.View
 import android.view.WindowManager
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.google.android.material.button.MaterialButton
@@ -14,6 +15,7 @@ import com.inklink.host.audio.PetTtsGate
 import com.inklink.host.learning.LearningManager
 import com.inklink.host.learning.LearningManager.PinyinLetter
 import com.inklink.host.learning.LearningManager.PinyinQuestion
+import com.inklink.host.util.SoundEffectManager
 
 /** 拼音森林(纯原生):6 张字母卡 → 4 道声调配对 → 结算。TTS 用代表字代偿发音。 */
 class PinyinActivity : AppCompatActivity() {
