@@ -1,0 +1,5 @@
+# 素材流水线中间产物不入库（终检后的成品才进 app-host/src/main/res/drawable-nodpi/）
+assets_draft/*.png
+out/
+__pycache__/
+review.html

@@ -1,0 +1,75 @@
+name: Android Build & Release
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew || true
+
+    - name: Unit tests (JVM 契约与回归门禁)
+      # 必须跑：此前三条衰减/玩法单测长期失效，正是因为 CI 只做 assembleRelease、
+      # 从不执行单测（编译期不检查断言，失效无法被发现）。素材契约（附录A）同样依赖这里。
+      env:
+        ORG_GRADLE_PROJECT_ABLY_KEY: ${{ secrets.ABLY_KEY }}
+        ORG_GRADLE_PROJECT_TENCENT_MAP_KEY: ${{ secrets.TENCENT_MAP_KEY }}
+        ORG_GRADLE_PROJECT_TENCENT_MAP_SK: ${{ secrets.TENCENT_MAP_SK }}
+      run: ./gradlew :app-host:testDebugUnitTest --stacktrace
+
+    - name: Upload test reports on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: unit-test-reports
+        path: app-host/build/reports/tests/
+        if-no-files-found: ignore
+
+    - name: Build APKs
+      env:
+        ORG_GRADLE_PROJECT_ABLY_KEY: ${{ secrets.ABLY_KEY }}
+        ORG_GRADLE_PROJECT_TENCENT_MAP_KEY: ${{ secrets.TENCENT_MAP_KEY }}
+        ORG_GRADLE_PROJECT_TENCENT_MAP_SK: ${{ secrets.TENCENT_MAP_SK }}
+      run: ./gradlew assembleRelease --stacktrace
+
+    - name: Rename APKs
+      run: |
+        mkdir -p dist
+        cp app-host/build/outputs/apk/release/*.apk dist/InkLink-Host-release.apk
+        cp app-controller/build/outputs/apk/release/*.apk dist/InkLink-Controller-release.apk
+
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'
+      with:
+        tag_name: v1.2.0-${{ github.run_number }}
+        name: "InkLink Release v1.2.0-${{ github.run_number }}"
+        body: |
+          InkLink 游戏化养成 V1.1 全量落地
+          - 双时钟秒级数值引擎（前台全速/后台÷20+地板30，分属性余量）
+          - Room 持久化（背包单行 JSON + 事件日志环形 500）+ 10s 节流写盘
+          - 10 物种共骨架部件化像素渲染（程序化补间、像素房间场景、分段进度条、像素气泡）
+          - AI 行为树（状态抱怨 + 性格加权自主行为 + 情绪台词气泡）
+          - 随机事件 / 冒险日记 / 里程碑成就 / 每日目标
+          - 三类远程礼物（道具/Buff/装饰）+ 零花钱、43 串门/逗弄子类型、赠礼 ACK
+        files: dist/*.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

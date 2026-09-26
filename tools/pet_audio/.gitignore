@@ -1,0 +1,2 @@
+# 合成中间产物：成品是 app-host/src/main/res/raw/*.wav（入库），out/ 只是本机可复现证据
+out/

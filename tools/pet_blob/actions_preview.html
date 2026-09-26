@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>InkLink · 云朵宠 场景与动作预览</title>
+<style>
+  body { margin: 0; padding: 24px; background: #10151a; color: #e6edf3; font-family: system-ui, sans-serif; }
+  h1 { font-size: 18px; }
+  h2 { font-size: 15px; margin-top: 26px; color: #c9d6e2; }
+  .note { color: #8b98a5; font-size: 13px; margin-bottom: 16px; line-height: 1.6; }
+  .grid { display: flex; flex-wrap: wrap; gap: 16px; }
+  .card { background: #1c242c; border-radius: 10px; padding: 10px; border: 1px solid #2c3944; }
+  .card img { image-rendering: pixelated; width: 192px; height: 192px; display: block; border-radius: 6px; }
+  .tag { font-size: 12px; color: #9fb3c8; margin-bottom: 6px; text-align: center; }
+  .seq { display: flex; gap: 4px; }
+  .seq .dot { color:#5b6b79; font-size:10px; }
+  img.scene { width: 240px; height: 240px; image-rendering: pixelated; }
+</style>
+</head>
+<body>
+  <h1>云朵宠 · 场景底图 & 具体动作</h1>
+  <div class="note">方案乙分层预览：<b>场景底图</b>(96px LCD 像素风) + <b>宠物动作帧</b>(透明) + <b>道具贴层</b>(碗/睡垫/球/书/泡泡/水桶)。动作帧逐帧同位置 4 张连排 = 循环节。</div>
+
+  <h2>场景底图 ×3</h2>
+  <div class="grid">
+    <div class="card"><div class="tag">bedroom · 卧室(床/窗/夜灯)</div><img class="scene" src="preview/scene_bedroom.png"></div>
+    <div class="card"><div class="tag">living · 客厅(沙发/挂画/地毯)</div><img class="scene" src="preview/scene_living.png"></div>
+    <div class="card"><div class="tag">window · 窗台(大窗/阳光/盆栽)</div><img class="scene" src="preview/scene_window.png"></div>
+  </div>
+
+  <h2>具体动作 · 场景合成帧</h2>
+  <div class="grid">
+    <div class="card"><div class="tag">idle 待机(呼吸2帧)</div><img src="preview/act_bedroom_idle_1.png"><div class="seq"><span class="dot">帧2→</span></div></div>
+    <div class="card"><div class="tag">eat 吃饭(低头→埋头→满足眯眼)</div><img src="preview/act_bedroom_eat_1.png"></div>
+    <div class="card"><div class="tag">eat 埋头进食</div><img src="preview/act_bedroom_eat_2.png"></div>
+    <div class="card"><div class="tag">eat 满足</div><img src="preview/act_bedroom_eat_3.png"></div>
+    <div class="card"><div class="tag">sleep 睡觉(垫子+月牙+Z浮)</div><img src="preview/act_bedroom_sleep_1.png"></div>
+    <div class="card"><div class="tag">sleep 帧2(Z上浮)</div><img src="preview/act_bedroom_sleep_2.png"></div>
+    <div class="card"><div class="tag">happy 玩球(跳起)</div><img src="preview/act_living_happy_1.png"></div>
+    <div class="card"><div class="tag">happy 顶点</div><img src="preview/act_living_happy_2.png"></div>
+    <div class="card"><div class="tag">happy 落地压</div><img src="preview/act_living_happy_3.png"></div>
+    <div class="card"><div class="tag">annoy 生气(十字气泡)</div><img src="preview/act_living_annoy_1.png"></div>
+    <div class="card"><div class="tag">annoy 帧2</div><img src="preview/act_living_annoy_2.png"></div>
+    <div class="card"><div class="tag">read 读书(低头看)</div><img src="preview/act_window_read_1.png"></div>
+    <div class="card"><div class="tag">read 翻页抬头</div><img src="preview/act_window_read_2.png"></div>
+    <div class="card"><div class="tag">clean 洗澡(泡泡环绕)</div><img src="preview/act_window_clean_1.png"></div>
+    <div class="card"><div class="tag">clean 帧2</div><img src="preview/act_window_clean_2.png"></div>
+  </div>
+
+  <h2>总拼图</h2>
+  <div><img src="preview/acts_sheet.png" style="image-rendering: pixelated; width: 100%; max-width: 1152px;"></div>
+  <p><a href="preview/preview.html" style="color:#7cc7ff;">← 回到 v2 单帧表情预览</a></p>
+</body>
+</html>

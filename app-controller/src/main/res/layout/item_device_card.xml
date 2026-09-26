@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="12dp"
+    android:background="#1E1E1E"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <!-- 顶部：设备备注/ID + 在线三态徽章 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tv_device_name"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_device_state_badge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingStart="8dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="2dp"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <!-- 详细状态指标：电量、卫星/精度、响铃状态、最近上报 -->
+    <TextView
+        android:id="@+id/tv_device_metrics"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:lineSpacingExtra="3dp"
+        android:textColor="#BBBBBB"
+        android:textSize="13sp" />
+
+    <!-- 宠物简报徽章条 -->
+    <LinearLayout
+        android:id="@+id/layout_pet_badge"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="#2C2C2C"
+        android:padding="6dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tv_pet_summary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🐾 宠物状态: Lv.1 | 饱食 80% | 心情 80%"
+            android:textColor="#FFB74D"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_pet_quick_feed"
+            android:layout_width="wrap_content"
+            android:layout_height="32dp"
+            android:backgroundTint="#FF9800"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:text="投喂"
+            android:textColor="#FFFFFF"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <!-- 学习简报行(LEARN_PROGRESS/47 收到后显示) -->
+    <TextView
+        android:id="@+id/tv_learn_summary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:background="#223330"
+        android:padding="6dp"
+        android:text="📚 学习简报:暂无"
+        android:textColor="#80CBC4"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <!-- 快捷操作按钮网格 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/btn_card_ring"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_weight="1"
+            android:backgroundTint="#E53935"
+            android:padding="0dp"
+            android:text="@string/btn_siren_ring"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_card_refresh"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:backgroundTint="#455A64"
+            android:padding="0dp"
+            android:text="@string/btn_deep_refresh"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_card_gps"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:backgroundTint="#00897B"
+            android:padding="0dp"
+            android:text="📍定位"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_card_chat"
+            android:layout_width="0dp"
+            android:layout_height="36dp"
+            android:layout_marginStart="6dp"
+            android:layout_weight="1"
+            android:backgroundTint="#1E88E5"
+            android:padding="0dp"
+            android:text="💬聊天"
+            android:textColor="#FFFFFF"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_card_alert"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:layout_marginTop="6dp"
+        android:backgroundTint="#FF6F00"
+        android:padding="0dp"
+        android:text="@string/btn_push_alert"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp" />
+
+</LinearLayout>
