@@ -128,12 +128,12 @@ class PoemActivity : AppCompatActivity() {
         val distractors = pool.filter { it.toString() != answer && !line.contains(it) }.shuffled().take(3)
         val opts = (listOf(answer) + distractors).shuffled()
         optionButtons.forEachIndexed { i, btn ->
-            val text = opts.getOrNull(i) ?: ""
-            btn.text = text ?: ""
+            val text: String = opts.getOrElse(i) { "" }
+            btn.text = text
             btn.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.white)
             btn.isEnabled = true
             btn.setOnClickListener {
-                if (text.isNullOrEmpty()) return@setOnClickListener
+                if (text.isEmpty()) return@setOnClickListener
                 quizCount++
                 if (text == answer) {
                     correct++
