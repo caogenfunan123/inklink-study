@@ -100,20 +100,24 @@ class LearningHubActivity : AppCompatActivity() {
     /** 护眼三规则拦截,阻断原因用宠物口吻 TTS 播报。 */
     private fun guardPass(): Boolean {
         val mgr = LearningManager.get(applicationContext)
-        val block = mgr.guardBlock()
-        if (block != null) {
-            val (msg, rest) = when (block) {
-                "NIGHT" -> "夜深啦,小宠物要睡觉了,明早再来学吧!" to false
-                "CAP" -> "今天学习时间用完啦,去玩会儿或陪小宠物吧!" to false
-                else -> "学了很久啦,先休息 ${mgr.restMin} 分钟保护小眼睛!" to true
+        return when (val block = mgr.guardBlock()) {
+            null -> true
+            "NIGHT" -> {
+                AlertDialog.Builder(this).setMessage("夜深啦,小宠物要睡觉了,明早再来学吧!")
+                    .setPositiveButton(android.R.string.ok, null).show()
+                false
             }
-            if (rest) startActivity(Intent(this, RestScreenActivity::class.java))
-            Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
-            AlertDialog.Builder(this).setMessage(msg)
-                .setPositiveButton(android.R.string.ok, null).show()
-            return false
+            "CAP" -> {
+                AlertDialog.Builder(this).setMessage("今天学习时间用完啦,去玩会儿或陪小宠物吧!")
+                    .setPositiveButton(android.R.string.ok, null).show()
+                false
+            }
+            else -> {
+                // 连续学习超时:直接进护眼休息页(本身即提示,不叠弹窗)
+                startActivity(Intent(this, RestScreenActivity::class.java))
+                false
+            }
         }
-        return true
     }
 
     private fun comingSoon() {

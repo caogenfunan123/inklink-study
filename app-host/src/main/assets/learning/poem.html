@@ -77,6 +77,7 @@ function show(id) { el(id).classList.remove("hidden"); }
 function hide(id) { el(id).classList.add("hidden"); }
 
 var LESSON = null, pIdx = 0, correct = 0, quizCount = 0, startTs = 0;
+var wrong = [];
 var quiz = null; // {lineIndex, blankIndex, answerChar}
 
 window.onLessonError = function (msg) {
@@ -158,6 +159,8 @@ function startQuiz() {
         setTimeout(function () { showPoem(); }, 1000);
       } else {
         b.classList.add("wrong"); sfx("GROAN"); haptic(200);
+        var t = LESSON.poems[pIdx].title;
+        if (wrong.indexOf(t) < 0) wrong.push(t);
         speak("是" + answer);
       }
     };
@@ -179,7 +182,7 @@ function finish() {
       module: LESSON.module, level: LESSON.level,
       correct: correct, total: total, durationSec: dur,
       chars: LESSON.poems.map(function (p) { return p.title; }),
-      wrongChars: []
+      wrongChars: wrong
     }));
   }
 }

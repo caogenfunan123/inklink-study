@@ -78,6 +78,7 @@ function show(id) { el(id).classList.remove("hidden"); }
 function hide(id) { el(id).classList.add("hidden"); }
 
 var LESSON = null, order = [], qIdx = 0, idx = 0, correct = 0, startTs = 0;
+var wrong = [];
 
 window.onLessonError = function (msg) {
   el("loading").textContent = "出错了:" + msg + "(点击重试)";
@@ -131,6 +132,11 @@ function askQuestion() {
     var p = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
     if (opts.indexOf(p) < 0) opts.push(p);
   }
+  // 干扰项也带随机调号,防止孩子只认"有调号的那一个"
+  opts = opts.map(function (o, i) {
+    if (i === 0) return o;
+    return markTone(o, 1 + Math.floor(Math.random() * 4));
+  });
   shuffle(opts);
   var box = el("options");
   box.innerHTML = "";
@@ -148,6 +154,7 @@ function askQuestion() {
         setTimeout(askQuestion, 900);
       } else {
         b.classList.add("wrong"); sfx("GROAN"); haptic(200);
+        if (wrong.indexOf(q.pinyin) < 0) wrong.push(q.pinyin);
         speak(q.char);
       }
     };
@@ -157,15 +164,15 @@ function askQuestion() {
 
 var TONES = { 1: "\u0304", 2: "\u0301", 3: "\u030C", 4: "\u0300", 0: "" };
 var VOWEL = "aoeiuvü";
-function toneMark(tone) {
+function markTone(base, tone) {
   var m = TONES[tone] || "";
-  if (!m) return "";
-  var base = qIdxChar();
+  if (!m) return base;
   for (var i = 0; i < base.length; i++) {
     if (VOWEL.indexOf(base[i]) >= 0) return base.slice(0, i) + base[i] + m + base.slice(i + 1);
   }
   return base + m;
 }
+function toneMark(tone) { return markTone(qIdxChar(), tone); }
 function qIdxChar() { return LESSON.questions[Math.min(qIdx, LESSON.questions.length - 1)].pinyin; }
 
 function shuffle(a) { for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } }

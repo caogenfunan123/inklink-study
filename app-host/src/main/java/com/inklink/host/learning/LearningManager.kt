@@ -122,6 +122,9 @@ class LearningManager private constructor(context: Context) {
         @SerializedName("wrongChars") val wrongChars: List<String> = emptyList()
     )
 
+    /** 对象入口:内部序列化后走统一结算。 */
+    fun finishLesson(result: LessonResult): RewardResult = finishLesson(gson.toJson(result))
+
     fun finishLesson(resultJson: String): RewardResult {
         val result = runCatching {
             gson.fromJson(resultJson, LessonResult::class.java)
@@ -226,15 +229,15 @@ class LearningManager private constructor(context: Context) {
     data class PinyinLetter(
         @SerializedName("pinyin") val pinyin: String,
         @SerializedName("category") val category: String,
-        @SerializedName("tips") val tips: String,
-        @SerializedName("char") val proxyChar: String
+        @SerializedName("tips") val tips: String = "",
+        @SerializedName("char") val proxyChar: String? = null
     )
 
     data class PinyinQuestion(
         @SerializedName("pinyin") val pinyin: String,
         @SerializedName("tone") val tone: Int,
         @SerializedName("char") val char: String,
-        @SerializedName("image") val image: String
+        @SerializedName("image") val image: String? = null
     )
 
     /** 拼音一关:6 张字母卡(声母/韵母/整体认读混抽) + 4 道声调配对题。 */
@@ -242,13 +245,17 @@ class LearningManager private constructor(context: Context) {
         val all = pinyinLibrary()
         val learned = dao.learnedItemIds(MODULE_PINYIN).toSet()
         val due = dao.dueReviews(MODULE_PINYIN, System.currentTimeMillis(), 6).map { it.itemId }.toSet()
-        val letters = if (reviewOnly) {
+        val rawLetters = if (reviewOnly) {
             val first = all.filter { it.pinyin in due }
             (if (first.size >= 6) first else (first + all.filter { it.pinyin in learned }))
                 .distinctBy { it.pinyin }.shuffled().take(6)
         } else {
             val fresh = all.filter { it.pinyin !in learned }
             (fresh + all).distinctBy { it.pinyin }.shuffled().take(6)
+        }
+        // 声母/韵母补代表字,保证 TTS 有可读的整字
+        val letters = rawLetters.map { l ->
+            if (l.proxyChar.isNullOrBlank()) l.copy(proxyChar = proxyCharFor(l)) else l
         }
         val questions = pinyinQuestions().shuffled().take(4)
         val pool = all.map { it.pinyin }.shuffled().take(20)
@@ -285,6 +292,40 @@ class LearningManager private constructor(context: Context) {
         }
     }
 
+    data class CommonSyllable(
+        @SerializedName("syllable") val syllable: String,
+        @SerializedName("initial") val initial: String,
+        @SerializedName("final") val final: String,
+        @SerializedName("tone") val tone: Int,
+        @SerializedName("char") val char: String
+    )
+
+    @Volatile
+    private var commonSyllableCache: List<CommonSyllable>? = null
+
+    fun commonSyllables(): List<CommonSyllable> {
+        commonSyllableCache?.let { return it }
+        synchronized(this) {
+            commonSyllableCache?.let { return it }
+            val json = appContext.assets.open("learning/pinyin.json").bufferedReader().use { it.readText() }
+            val obj = gson.fromJson(json, com.google.gson.JsonObject::class.java)
+            val type = object : TypeToken<List<CommonSyllable>>() {}.type
+            val list: List<CommonSyllable> = gson.fromJson(obj.getAsJsonArray("commonSyllables"), type)
+            commonSyllableCache = list
+            return list
+        }
+    }
+
+    /** 拼音 TTS 代偿:声母/韵母没有整字发音,借常用音节例字代读(b→播)。 */
+    fun proxyCharFor(letter: PinyinLetter): String? {
+        val common = commonSyllables()
+        return when {
+            letter.category == "initial" -> common.firstOrNull { it.initial == letter.pinyin }?.char
+            letter.category == "wholeSyllable" -> common.firstOrNull { it.syllable == letter.pinyin }?.char
+            else -> common.firstOrNull { it.final == letter.pinyin }?.char
+        }
+    }
+
     fun pinyinQuestions(): List<PinyinQuestion> {
         pinyinQuestionCache?.let { return it }
         synchronized(this) {
@@ -305,8 +346,8 @@ class LearningManager private constructor(context: Context) {
         @SerializedName("author") val author: String,
         @SerializedName("dynasty") val dynasty: String,
         @SerializedName("lines") val lines: List<String>,
-        @SerializedName("pinyins") val pinyins: List<List<String>>,
-        @SerializedName("trans") val trans: String,
+        @SerializedName("pinyins") val pinyins: List<List<String>>? = null,
+        @SerializedName("trans") val trans: String? = null,
         @SerializedName("level") val level: Int
     )
 
@@ -368,7 +409,7 @@ class LearningManager private constructor(context: Context) {
                     guard++
                 }
                 val shuffled = set.toList().shuffled()
-                return shuffled to shuffled.indexOf(ans)
+                return shuffled.map { it.toString() } to shuffled.indexOf(ans)
             }
             when (type) {
                 "ADD5", "ADD10", "ADD20" -> {

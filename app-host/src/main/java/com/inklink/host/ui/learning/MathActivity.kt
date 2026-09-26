@@ -1,6 +1,8 @@
 package com.inklink.host.ui.learning
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import android.widget.TextView
 import android.widget.Toast
@@ -25,6 +27,7 @@ class MathActivity : AppCompatActivity() {
     private val seenTypes = LinkedHashSet<String>()
     private var startTs = 0L
     private lateinit var sfx: SoundEffectManager
+    private val handler = Handler(Looper.getMainLooper())
 
     private lateinit var tvProgress: TextView
     private lateinit var tvQuestion: TextView
@@ -91,11 +94,11 @@ class MathActivity : AppCompatActivity() {
                     optionButtons[q.answer].backgroundTintList =
                         ContextCompat.getColorStateList(this, R.color.math_correct)
                     idx++
-                    postDelayed({ render() }, 1200)
+                    handler.postDelayed({ render() }, 1200)
                 }
             }
         }
-        postDelayed({ speakCurrent() }, 350)
+        handler.postDelayed({ speakCurrent() }, 350)
     }
 
     private fun finishLesson() {

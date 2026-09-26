@@ -27,16 +27,21 @@ class SchulteGridActivity : AppCompatActivity() {
         val mgr = LearningManager.get(applicationContext)
         val numbers = (1..25).shuffled()
         numbers.forEach { n ->
+            val density = resources.displayMetrics.density
+            val lp = GridLayout.LayoutParams()
+            lp.width = 0
+            lp.height = (density * 56).toInt()
+            lp.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+            lp.rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+            val m = (density * 4).toInt()
+            lp.leftMargin = m
+            lp.topMargin = m
+            lp.rightMargin = m
+            lp.bottomMargin = m
             val btn = MaterialButton(this).apply {
                 text = n.toString()
                 textSize = 22f
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = 0
-                    height = (resources.displayMetrics.density * 56).toInt()
-                    columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                    rowSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                }
-                setMargins(4, 4, 4, 4)
+                layoutParams = lp
             }
             btn.setOnClickListener { onPick(btn, n) }
             grid.addView(btn)
@@ -56,7 +61,7 @@ class SchulteGridActivity : AppCompatActivity() {
             val secs = (SystemClock.elapsedRealtime() - startElapsed) / 1000.0
             tvStatus.text = "完成!用时 %.1f 秒 🎉".format(secs)
             SoundEffectManager(this).play(SoundEffectManager.Sfx.LEVEL_UP)
-            if (!rewarded) {
+            runCatching {
                 LearningManager.get(applicationContext).finishLesson(
                     LearningManager.LessonResult(
                         module = "FOCUS", level = 2,
