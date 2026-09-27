@@ -132,7 +132,7 @@ class TrackStore(context: Context) {
                     dir.listFiles { f -> f.isFile && f.name.endsWith(".jsonl") }?.forEach { f ->
                         val day = f.name.removeSuffix(".jsonl")
                         if (day.matches(DAY_PATTERN)) {
-                            val t = runCatching { dayFormat.parse(day)?.time }.getOrNull()
+                            val t = runCatching { dayFormatter.parse(day)?.time }.getOrNull()
                             if (t != null && t < cutoff) f.delete()
                         }
                     }
