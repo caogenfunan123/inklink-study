@@ -29,18 +29,21 @@ jobs:
     - name: Unit tests (JVM 契约与回归门禁)
       # 必须跑：此前三条衰减/玩法单测长期失效，正是因为 CI 只做 assembleRelease、
       # 从不执行单测（编译期不检查断言，失效无法被发现）。素材契约（附录A）同样依赖这里。
+      # app-controller 单测（ControllerState/DeviceRepository/TrackStore）同为回归门禁。
       env:
         ORG_GRADLE_PROJECT_ABLY_KEY: ${{ secrets.ABLY_KEY }}
         ORG_GRADLE_PROJECT_TENCENT_MAP_KEY: ${{ secrets.TENCENT_MAP_KEY }}
         ORG_GRADLE_PROJECT_TENCENT_MAP_SK: ${{ secrets.TENCENT_MAP_SK }}
-      run: ./gradlew :app-host:testDebugUnitTest --stacktrace
+      run: ./gradlew :app-host:testDebugUnitTest :app-controller:testDebugUnitTest --stacktrace
 
     - name: Upload test reports on failure
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: unit-test-reports
-        path: app-host/build/reports/tests/
+        path: |
+          app-host/build/reports/tests/
+          app-controller/build/reports/tests/
         if-no-files-found: ignore
 
     - name: Build APKs
