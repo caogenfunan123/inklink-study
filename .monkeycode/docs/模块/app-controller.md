@@ -6,24 +6,30 @@
 
 ```
 app-controller/src/main/java/com/inklink/controller/
-├── InkControllerApplication.kt  # 473行 全局单例持有者 + 消息路由
-│   # route() 分发：GPS_REPORT/DEVICE_STATUS/CMD_ACK/PING(PONG应答)/HEARTBEAT/
-│   # ALERT_*/PET_ALERT_EVENT/LEARN_PROGRESS/AUDIO_START_STOP/CHAT_*
+├── InkControllerApplication.kt  # 全局单例持有者 + 消息路由（含 trackStore/告警通知直达地图）
+│   # route() 分发：GPS_REPORT(附 TrackStore 落盘)/DEVICE_STATUS/CMD_ACK/PING(PONG应答)/
+│   # HEARTBEAT/ALERT_*(通知加EXTRA_FOCUS_DEVICE)/PET_ALERT_EVENT/LEARN_PROGRESS/
+│   # AUDIO_START_STOP/CHAT_*
 │   # markSeen 刷新设备活跃时间；连接管理 connectLocal/switchRelay/switchAbly
 ├── state/ControllerState.kt     # 多设备聚合：gpsByDevice/statusByDevice/
 │                                 # trajectoryByDevice(500点)/learnSummaryByDevice(内存)/
 │                                 # selectedDeviceId/isOnline(60s阈值)/dispatchAck
 ├── care/CareMonitor.kt          # 60s评估：离线超30min提醒/连续在线2h休息提醒（冷却30min）
 ├── data/
-│   ├── DeviceEntity.kt          # deviceId + nickname
-│   └── DeviceRepository.kt      # SharedPreferences(inklink_devices) + JSON
+│   ├── DeviceEntity.kt          # deviceId + nickname + fence*(最后下发围栏,WGS-84,可空)
+│   ├── DeviceRepository.kt      # SharedPreferences(inklink_devices) + JSON + updateFence
+│   └── TrackStore.kt            # 历史轨迹按天落盘 filesDir/tracks/<id>/<yyyyMMdd>.jsonl
+│                                # acc>50m漂移过滤/30天滚动清理/GPX 1.1导出/Haversine+抽稀
 ├── service/RouteApi.kt          # 腾讯驾车路线：SK MD5签名 + polyline 1e-5偏移解压
 ├── audio/AudioSettings.kt       # TTS播报全局开关（关闭时源头不注入ttsText）
 └── ui/
     ├── ControllerActivity.kt    # 452行 Launcher Dashboard：设备卡流(三态徽章/电量/坐标/
     │                            # 学习简报)/强控指令/投屏/扫码连接/传输模式设置
-    ├── MapActivity.kt           # 腾讯地图：受控红Marker+蓝轨迹+主控绿Marker+驾车路线
-    ├── FenceEditActivity.kt     # 地图选圆心+SeekBar半径，GCJ-02→WGS-84反变换后下发
+    ├── MapActivity.kt           # 腾讯地图：受控红Marker+蓝轨迹+主控绿Marker+驾车路线+
+    │                            # 围栏红圈可视化+历史回放(按天,橙线+起终点旗+里程统计)+
+    │                            # GPX导出分享(FileProvider)+EXTRA_FOCUS_DEVICE聚焦
+    ├── FenceEditActivity.kt     # 地图选圆心+SeekBar半径，GCJ-02→WGS-84反变换后下发+
+    │                            # 下发成功后 DeviceRepository.updateFence 落库
     ├── DeviceManageActivity.kt  # 多设备绑定/点选目标/改备注/删除
     ├── PetDetailActivity.kt     # 567行 宠物关怀台：互动31(长按5连投)/事件音23/系统音22/
     │                            # 语音任务45+46回执→10金币闭环/三类赠礼44/逗弄43-TEASE/
@@ -60,4 +66,4 @@ app-controller/src/main/java/com/inklink/controller/
 
 - 主控端发指令统一走 InkControllerApplication 的 sendXxx API（内置 targetDeviceId、TTS 开关过滤、ACK Toast 回显）
 - 地图相关全部 GCJ-02：展示前 WGS-84→GCJ-02，下发围栏前反变换
-- 单测 2 类：ControllerStateTest（聚合/在线判定）/ DeviceRepositoryTest（CRUD+去重）；均不在 CI 门禁内
+- 单测 3 类：ControllerStateTest（聚合/在线判定）/ DeviceRepositoryTest（CRUD+去重+围栏持久化）/ TrackStoreTest（落盘回读/漂移过滤/GPX/抽稀/Haversine）；CI 门禁含 :app-host 与 :app-controller 两模块（.github/workflows/android.yml）
