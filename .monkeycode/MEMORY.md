@@ -32,12 +32,13 @@ Entries discovered by the Agent during task execution should follow this format:
 ## Entries
 
 [InkLink 构建环境与命令]
-- Date: 2026-08-28
-- Context: Discovered by Agent while 对 InkLink Android 三模块工程做编译验证
+- Date: 2026-08-28（2026-09-27 更新）
+- Context: Discovered by Agent while 对 InkLink Android 三模块工程做编译验证；2026-09-27 拉取 inklink-study 仓库后复核
 - Category: Build Methods & Environment Configuration
 - Instructions:
-  - 构建命令：`cd /workspace && ANDROID_HOME=/opt/android-sdk gradle :common:testDebugUnitTest :app-controller:testDebugUnitTest :app-controller:assembleDebug :app-host:assembleDebug --no-daemon --console=plain`
-  - 本机需手动安装：openjdk-17-jdk-headless、Gradle 8.5（/opt/gradle-8.5，加入 PATH）、Android SDK 34（/opt/android-sdk，含 platforms;android-34 与 build-tools;34.0.0）；工程无 gradle wrapper，依赖系统 Gradle
+  - 构建命令：`cd /workspace && ANDROID_HOME=/opt/android-sdk ./gradlew :common:testDebugUnitTest :app-controller:testDebugUnitTest :app-controller:assembleDebug :app-host:assembleDebug --console=plain`
+  - 本机需手动安装：openjdk-17-jdk-headless、Android SDK 34（/opt/android-sdk，含 platforms;android-34 与 build-tools;34.0.0）
+  - 仓库现自带 gradle wrapper（gradle-8.5，gradlew/gradle-wrapper.properties 已入库），直接 `./gradlew` 即可；旧 monorepo 无 wrapper 需系统 Gradle 的历史情况已失效
   - `/workspace/local.properties` 需写 `sdk.dir=/opt/android-sdk` 指向 SDK
   - 网络：repo.maven.apache.org（Maven Central 直连）在本环境返回 403，依赖解析必须走阿里云镜像（maven.aliyun.com/repository/central、/google、/public），已配置于 settings.gradle.kts 并置于最前
   - 地图 SDK 已从高德迁移为腾讯地图（仅 app-controller）：Maven 源 `https://mirrors.tencent.com/nexus/repository/maven-public/`，依赖 `tencent-map-vector-sdk:6.13.0.260731.bb0666d5.209828299` + `foundation:0.9.1.6875646`；Manifest meta-data 配 Key；隐私初始化 `TencentMapInitializer.setAgreePrivacy` → `start`
