@@ -37,6 +37,7 @@ graph TD
 ### 2. 签名共享（双端覆盖安装的基础）
 
 - 签名 keystore：`keystore/inklink-release.keystore`（RSA 2048，alias `inklink`，有效期至 2054），**在 inklink-controller 仓库入库**，study 与 host 仓共享同一份（见各仓 SIGNING 引用）。
+- SHA1 指纹（腾讯地图控制台登记用）：`2E:60:B8:89:B0:6D:07:21:E9:0F:01:9B:2A:DE:0E:A7:89:7B:9B:AD`
 - SHA256 指纹：`D9:D9:3C:FC:FA:39:F8:EB:5E:D9:C0:D2:B6:14:E0:8A:56:50:A0:CA:66:BC:4C:91:7D:54:11:67:28:0E:04:41`
 - 两端 App 使用同一签名 → 可互相覆盖安装并共享签名级权限。腾讯地图控制台登记此 keystore 的 SHA1 即可让 CI 产物地图可用。
 - 签名配置：`signingConfigs.release` 从环境变量（`INKLINK_KEYSTORE_PATH` / `INKLINK_STORE_PASSWORD` / `INKLINK_KEY_ALIAS` / `INKLINK_KEY_PASSWORD`）或 `local.properties`（`inklinkStoreFile` / `inklinkStorePassword` / `inklinkKeyAlias` / `inklinkKeyPassword`）读取。

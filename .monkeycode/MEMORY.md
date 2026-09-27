@@ -31,6 +31,27 @@ Entries discovered by the Agent during task execution should follow this format:
 
 ## Entries
 
+[构建验证走 GitHub Actions CI（本地无工具链）]
+- Date: 2026-09-27
+- Context: 用户在本地沙盒重置（无 JDK/SDK）后明确指示不走本地构建
+- Category: Workflow & Collaboration / Environment Configuration
+- Instructions:
+  - 代码验证优先推送 GitHub 仓库后走 Actions CI（`.github/workflows/android.yml`，push master 自动触发：双模块单测 + assembleRelease + Release 发布），不在本地装 JDK/Android SDK 做构建
+  - 用户会提供 GitHub PAT（聊天中给出）；token 只允许写入 /tmp 临时文件使用（chmod 600），严禁写入仓库任何文件或 MEMORY；用完建议用户轮换
+  - 推送输出必须 sed 脱敏 token；git push 形式 `git push https://x-access-token:${TOKEN}@github.com/caogenfunan123/inklink-study.git master:master`
+  - CI 单测门禁覆盖 :app-host 与 :app-controller 两模块（2026-09-27 起含 TrackStore 等新用例）
+
+[InkLink 仓库生态与签名体系]
+- Date: 2026-09-27
+- Context: Discovered by Agent while 排查 CI 产物不可安装/无密钥问题并建立仓库关联
+- Category: Operations & Deployment / Environment Configuration
+- Instructions:
+  - 五仓拓扑：inklink-study（master，开发主线 monorepo 全功能）+ inklink-common/controller/host（main，2026-08-28 拆分的发布载体，common 走 submodule@09a3e81 已落后主线）+ inklink-app（早期统一 APK 实验，停滞）
+  - 统一签名：keystore/inklink-release.keystore（alias inklink，密码 InkLink@2026_Release_Store 已在拆分仓 SIGNING.md 公开），SHA1=2E:60:B8:89:B0:6D:07:21:E9:0F:01:9B:2A:DE:0E:A7:89:7B:9B:AD（腾讯控制台登记用）；双模块 signingConfigs 从 INKLINK_* env/local.properties 读取
+  - study 仓 CI secrets 已配齐（2026-09-27 经 API 写入）：ABLY_KEY（值取自拆分仓硬编码默认值）、INKLINK_STORE_PASSWORD/KEY_PASSWORD/KEY_ALIAS
+  - 拆分仓哲学是密钥硬编码默认值开箱即用；study 主线口径是密钥不入库（local.properties/CI secrets），两口径并存，study 改动勿引入硬编码 key
+  - 仓库关联总览文档：/workspace/REPOSITORIES.md（拓扑/同步矩阵/操作指引），controller 仓 README 有回链
+
 [InkLink 构建环境与命令]
 - Date: 2026-08-28（2026-09-27 更新）
 - Context: Discovered by Agent while 对 InkLink Android 三模块工程做编译验证；2026-09-27 拉取 inklink-study 仓库后复核
