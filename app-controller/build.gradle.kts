@@ -23,6 +23,14 @@ val tencentMapSk: String = local.getProperty("TENCENT_MAP_SK")
     ?: (project.findProperty("TENCENT_MAP_SK") as? String)
     ?: ""
 
+// 统一签名(与 inklink-controller/inklink-host 拆分仓共享同一 keystore,双端可覆盖安装):
+// 来源优先级:环境变量(CI Secrets) > local.properties > 默认 keystore 路径(密码必须注入)
+val inklinkEnv = System.getenv()
+val signingProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+
 android {
     namespace = "com.inklink.controller"
     compileSdk = 34
@@ -43,9 +51,26 @@ android {
         buildConfig = true
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file(
+                inklinkEnv["INKLINK_KEYSTORE_PATH"]
+                    ?: signingProps.getProperty("inklinkStoreFile")
+                    ?: "keystore/inklink-release.keystore"
+            )
+            storePassword = inklinkEnv["INKLINK_STORE_PASSWORD"]
+                ?: signingProps.getProperty("inklinkStorePassword") ?: ""
+            keyAlias = inklinkEnv["INKLINK_KEY_ALIAS"]
+                ?: signingProps.getProperty("inklinkKeyAlias") ?: "inklink"
+            keyPassword = inklinkEnv["INKLINK_KEY_PASSWORD"]
+                ?: signingProps.getProperty("inklinkKeyPassword") ?: ""
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

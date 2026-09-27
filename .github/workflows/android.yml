@@ -51,6 +51,9 @@ jobs:
         ORG_GRADLE_PROJECT_ABLY_KEY: ${{ secrets.ABLY_KEY }}
         ORG_GRADLE_PROJECT_TENCENT_MAP_KEY: ${{ secrets.TENCENT_MAP_KEY }}
         ORG_GRADLE_PROJECT_TENCENT_MAP_SK: ${{ secrets.TENCENT_MAP_SK }}
+        INKLINK_STORE_PASSWORD: ${{ secrets.INKLINK_STORE_PASSWORD }}
+        INKLINK_KEY_PASSWORD: ${{ secrets.INKLINK_KEY_PASSWORD }}
+        INKLINK_KEY_ALIAS: ${{ secrets.INKLINK_KEY_ALIAS }}
       run: ./gradlew assembleRelease --stacktrace
 
     - name: Rename APKs

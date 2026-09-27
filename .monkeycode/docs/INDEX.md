@@ -2,7 +2,7 @@
 
 InkLink 是双端安卓项目：孩子端「电子宠物 + 幼小衔接学习乐园」+ 家长端远程管控与关怀。本文档面向接手开发的 AI 与开发者，目标是读文档即可定位代码，避免全项目逐文件通读。
 
-**快速链接**: [架构](./ARCHITECTURE.md) | [接口协议](./INTERFACES.md) | [开发者指南](./DEVELOPER_GUIDE.md)
+**快速链接**: [架构](./ARCHITECTURE.md) | [接口协议](./INTERFACES.md) | [开发者指南](./DEVELOPER_GUIDE.md) | [仓库关联总览](../../../REPOSITORIES.md)
 
 ---
 
