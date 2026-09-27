@@ -57,6 +57,18 @@
     <string name="route_plan">规划路线</string>
     <string name="route_failed">路线规划失败：%1$s</string>
     <string name="self_label">我的位置</string>
+
+    <!-- 历史轨迹回放与 GPX 导出 -->
+    <string name="history_track">历史轨迹</string>
+    <string name="export_gpx">导出GPX</string>
+    <string name="exit_playback">退出回放</string>
+    <string name="no_track_data">该设备暂无轨迹数据</string>
+    <string name="playback_loading">加载 %1$s 轨迹…</string>
+    <string name="playback_start">起点</string>
+    <string name="playback_end">终点</string>
+    <string name="playback_started">已进入历史回放</string>
+    <string name="track_stats">%1$s：%2$.1f 公里 · %3$d 个点 · %4$d 分钟</string>
+
     <string name="chat_title">聊天</string>
     <string name="chat_input_hint">输入消息…</string>
     <string name="chat_send">发送</string>

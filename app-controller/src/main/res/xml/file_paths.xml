@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- TrackStore GPX 导出目录（filesDir/exports） -->
+    <files-path name="exports" path="exports/" />
+</paths>

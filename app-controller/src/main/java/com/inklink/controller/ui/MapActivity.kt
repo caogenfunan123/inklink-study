@@ -1,21 +1,28 @@
 package com.inklink.controller.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.FileProvider
 import com.inklink.common.utils.CoordinateConverter
 import com.inklink.controller.BuildConfig
 import com.inklink.controller.InkControllerApplication
 import com.inklink.controller.R
+import com.inklink.controller.data.TrackStore
 import com.inklink.controller.service.RouteApi
 import com.inklink.controller.state.ControllerState
 import com.tencent.tencentmap.mapsdk.maps.CameraUpdateFactory
 import com.tencent.tencentmap.mapsdk.maps.MapView
 import com.tencent.tencentmap.mapsdk.maps.TencentMap
 import com.tencent.tencentmap.mapsdk.maps.model.BitmapDescriptorFactory
+import com.tencent.tencentmap.mapsdk.maps.model.Circle
+import com.tencent.tencentmap.mapsdk.maps.model.CircleOptions
 import com.tencent.tencentmap.mapsdk.maps.model.LatLng
+import com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds
 import com.tencent.tencentmap.mapsdk.maps.model.Marker
 import com.tencent.tencentmap.mapsdk.maps.model.MarkerOptions
 import com.tencent.tencentmap.mapsdk.maps.model.Polyline
@@ -24,8 +31,11 @@ import com.tencent.tencentmap.mapsdk.maps.model.PolylineOptions
 /**
  * 主控端地图页面：
  * - 主控端自身位置显示为绿色 Marker，受控端位置统一显示为红色 Marker。
- * - 每个受控端绘制历史轨迹折线。
+ * - 每个受控端绘制历史轨迹折线，并显示最后下发的电子围栏圈。
+ * - 历史轨迹回放：按设备按天从本地轨迹文件回放（起点绿旗/终点橙旗 + 里程统计）。
+ * - GPX 导出：将某天轨迹导出为 GPX 1.1 文件并通过系统分享。
  * - 支持主动拉取受控端位置、从自身位置到受控端规划驾车路线。
+ * - 支持从告警通知点击直达并聚焦指定设备（EXTRA_FOCUS_DEVICE）。
  */
 class MapActivity : AppCompatActivity() {
 
@@ -37,8 +47,17 @@ class MapActivity : AppCompatActivity() {
 
     private val markers = mutableMapOf<String, Marker>()
     private val trajectoryPolylines = mutableMapOf<String, Polyline>()
+    private val fenceCircles = mutableMapOf<String, Circle>()
     private var selfMarker: Marker? = null
     private var routePolyline: Polyline? = null
+
+    // 历史回放图层（与实时轨迹、路线互不干扰）
+    private var playbackPolyline: Polyline? = null
+    private var playbackStartMarker: Marker? = null
+    private var playbackEndMarker: Marker? = null
+
+    /** 回放统计文案；回放期间 render() 优先展示，避免被告警/等待文案覆盖。 */
+    private var playbackStats: String? = null
 
     /** 焦点设备（选中或最近上报）上一次位置，避免重复相机动画。 */
     private var lastFocusKey: String? = null
@@ -65,8 +84,17 @@ class MapActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.refresh_gps, Toast.LENGTH_SHORT).show()
         }
         findViewById<Button>(R.id.btn_route).setOnClickListener { planRoute() }
+        findViewById<Button>(R.id.btn_history).setOnClickListener { showHistoryDialog() }
+        findViewById<Button>(R.id.btn_export).setOnClickListener { showExportDialog() }
 
         app.startSelfLocation()
+        handleIntent(intent)
+        render()
+    }
+
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
         render()
     }
 
@@ -94,6 +122,12 @@ class MapActivity : AppCompatActivity() {
         state.removeListener(listener)
         mapView.onDestroy()
         super.onDestroy()
+    }
+
+    /** 告警通知点击跳转：聚焦指定设备（选中即触发相机动画）。 */
+    private fun handleIntent(intent: Intent?) {
+        val focus = intent?.getStringExtra(InkControllerApplication.EXTRA_FOCUS_DEVICE) ?: return
+        app.selectDevice(focus)
     }
 
     private fun render() {
@@ -124,6 +158,9 @@ class MapActivity : AppCompatActivity() {
             renderTrajectory(deviceId)
         }
 
+        // 已下发围栏可视化（与实时 GPS 无关，配置过就画）
+        renderFences()
+
         // 主控端自身位置（绿色）
         renderSelfLocation()
 
@@ -143,11 +180,41 @@ class MapActivity : AppCompatActivity() {
             }
         }
 
-        tvInfo.text = state.latestAlert?.let {
+        tvInfo.text = playbackStats ?: state.latestAlert?.let {
             val from = it.deviceId?.let { id -> deviceNickname(id) }
             val suffix = from?.let { n -> "（$n）" } ?: ""
             "${it.type}${suffix}: ${it.lat}, ${it.lng}（半径 ${it.radius}m）"
         } ?: getString(R.string.waiting_gps)
+    }
+
+    /** 画出每台已配置围栏设备的围栏圈（本地记录的 WGS-84 转 GCJ-02 显示）。 */
+    private fun renderFences() {
+        val devices = app.devices().associateBy { it.deviceId }
+        fenceCircles.keys.filter { id ->
+            val d = devices[id]
+            d == null || d.fenceLat == null || d.fenceLng == null || d.fenceRadiusM == null
+        }.forEach { id -> fenceCircles.remove(id)?.remove() }
+
+        devices.values.forEach { d ->
+            val lat = d.fenceLat ?: return@forEach
+            val lng = d.fenceLng ?: return@forEach
+            val radius = d.fenceRadiusM ?: return@forEach
+            val (gcjLat, gcjLng) = CoordinateConverter.wgs84ToGcj02(lat, lng)
+            val existing = fenceCircles[d.deviceId]
+            if (existing == null) {
+                fenceCircles[d.deviceId] = tencentMap.addCircle(
+                    CircleOptions()
+                        .center(LatLng(gcjLat, gcjLng))
+                        .radius(radius)
+                        .strokeColor(FENCE_COLOR)
+                        .strokeWidth(2f)
+                        .fillColor(FENCE_FILL)
+                )
+            } else {
+                existing.center = LatLng(gcjLat, gcjLng)
+                existing.radius = radius
+            }
+        }
     }
 
     private fun renderSelfLocation() {
@@ -187,6 +254,134 @@ class MapActivity : AppCompatActivity() {
         }
     }
 
+    private fun targetDeviceId(): String? =
+        state.selectedDeviceId ?: state.gpsByDevice.keys.firstOrNull()
+
+    /** 历史回放：选择设备有数据的日期，从本地轨迹文件回放。 */
+    private fun showHistoryDialog() {
+        val target = targetDeviceId()
+        if (target == null) {
+            Toast.makeText(this, R.string.waiting_gps, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val days = app.trackStore.listDays(target)
+        if (days.isEmpty()) {
+            Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("${deviceNickname(target)} · ${getString(R.string.history_track)}")
+            .setItems(days.toTypedArray()) { _, which -> playDay(target, days[which]) }
+        if (playbackStats != null) {
+            dialog.setNegativeButton(R.string.exit_playback) { _, _ -> exitPlayback() }
+        }
+        dialog.show()
+    }
+
+    private fun playDay(deviceId: String, day: String) {
+        Toast.makeText(this, getString(R.string.playback_loading, day), Toast.LENGTH_SHORT).show()
+        Thread {
+            val points = app.trackStore.simplify(app.trackStore.readDay(deviceId, day))
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (points.size < 2) {
+                    Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
+                } else {
+                    drawPlayback(deviceId, day, points)
+                }
+            }
+        }.start()
+    }
+
+    private fun drawPlayback(deviceId: String, day: String, points: List<TrackStore.TrackPoint>) {
+        exitPlaybackOverlays()
+        val opts = PolylineOptions().width(10f).color(PLAYBACK_COLOR)
+        var meters = 0.0
+        var prev: TrackStore.TrackPoint? = null
+        val gcjPoints = points.map { p ->
+            prev?.let { meters += app.trackStore.haversineMeters(it.la, it.lo, p.la, p.lo) }
+            prev = p
+            val (lat, lng) = CoordinateConverter.wgs84ToGcj02(p.la, p.lo)
+            LatLng(lat, lng)
+        }
+        gcjPoints.forEach { opts.add(it) }
+        playbackPolyline = tencentMap.addPolyline(opts)
+
+        playbackStartMarker = tencentMap.addMarker(
+            MarkerOptions(gcjPoints.first())
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_GREEN))
+                .title(getString(R.string.playback_start))
+        )
+        playbackEndMarker = tencentMap.addMarker(
+            MarkerOptions(gcjPoints.last())
+                .icon(BitmapDescriptorFactory.defaultMarker(BitmapDescriptorFactory.HUE_ORANGE))
+                .title(getString(R.string.playback_end))
+        )
+
+        val builder = LatLngBounds.builder()
+        gcjPoints.forEach { builder.include(it) }
+        tencentMap.animateCamera(CameraUpdateFactory.newLatLngBounds(builder.build(), 100))
+
+        val km = meters / 1000.0
+        val minutes = (points.last().t - points.first().t) / 60000
+        playbackStats = getString(R.string.track_stats, day, km, points.size, minutes)
+        Toast.makeText(this, R.string.playback_started, Toast.LENGTH_SHORT).show()
+        render()
+    }
+
+    private fun exitPlayback() {
+        exitPlaybackOverlays()
+        playbackStats = null
+        render()
+    }
+
+    private fun exitPlaybackOverlays() {
+        playbackPolyline?.remove()
+        playbackPolyline = null
+        playbackStartMarker?.remove()
+        playbackStartMarker = null
+        playbackEndMarker?.remove()
+        playbackEndMarker = null
+    }
+
+    /** GPX 导出：选日期 → 后台导出 → 系统分享。 */
+    private fun showExportDialog() {
+        val target = targetDeviceId()
+        if (target == null) {
+            Toast.makeText(this, R.string.waiting_gps, Toast.LENGTH_SHORT).show()
+            return
+        }
+        val days = app.trackStore.listDays(target)
+        if (days.isEmpty()) {
+            Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("${deviceNickname(target)} · ${getString(R.string.export_gpx)}")
+            .setItems(days.toTypedArray()) { _, which -> exportGpx(target, days[which]) }
+            .show()
+    }
+
+    private fun exportGpx(deviceId: String, day: String) {
+        Thread {
+            val file = app.trackStore.exportGpx(deviceId, day)
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (file == null) {
+                    Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
+                    return@runOnUiThread
+                }
+                val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", file)
+                val send = Intent(Intent.ACTION_SEND).apply {
+                    type = "application/gpx+xml"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                startActivity(Intent.createChooser(send, getString(R.string.export_gpx)))
+            }
+        }.start()
+    }
+
     private fun planRoute() {
         val self = state.selfLocation
         if (self == null) {
@@ -209,6 +404,7 @@ class MapActivity : AppCompatActivity() {
             fromWgs84 = true
         ) { route, error ->
             runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
                 if (route == null) {
                     Toast.makeText(this, getString(R.string.route_failed, error ?: ""), Toast.LENGTH_LONG).show()
                     return@runOnUiThread
@@ -237,7 +433,7 @@ class MapActivity : AppCompatActivity() {
         val last = LatLng(points.last().first, points.last().second)
         tencentMap.animateCamera(
             CameraUpdateFactory.newLatLngBounds(
-                com.tencent.tencentmap.mapsdk.maps.model.LatLngBounds.builder()
+                LatLngBounds.builder()
                     .include(first)
                     .include(last)
                     .build(),
@@ -253,5 +449,8 @@ class MapActivity : AppCompatActivity() {
     companion object {
         const val TRAJECTORY_COLOR = 0xFF1565C0.toInt()
         const val ROUTE_COLOR = 0xFF00C853.toInt()
+        const val PLAYBACK_COLOR = 0xFFFF6D00.toInt()
+        const val FENCE_COLOR = 0xFFE53935.toInt()
+        const val FENCE_FILL = 0x28E53935
     }
 }

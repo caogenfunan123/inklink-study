@@ -45,6 +45,17 @@ class DeviceRepository(context: Context) {
         save(list().map { if (it.deviceId == deviceId) it.copy(nickname = nickname) else it })
     }
 
+    /** 记录设备最后一次下发的围栏（WGS-84），供主控端地图画圈可视化。 */
+    fun updateFence(deviceId: String, lat: Double, lng: Double, radiusMeters: Double) {
+        save(list().map {
+            if (it.deviceId == deviceId) {
+                it.copy(fenceLat = lat, fenceLng = lng, fenceRadiusM = radiusMeters)
+            } else {
+                it
+            }
+        })
+    }
+
     private fun save(devices: List<DeviceEntity>) {
         prefs.edit().putString(KEY_DEVICES, gson.toJson(devices)).apply()
     }

@@ -128,13 +128,18 @@ class FenceEditActivity : AppCompatActivity(), TencentMap.OnMapClickListener {
             return
         }
         val app = application as InkControllerApplication
-        if (app.controllerState.selectedDeviceId == null) {
+        val target = app.controllerState.selectedDeviceId
+        if (target == null) {
             Toast.makeText(this, R.string.no_target_selected, Toast.LENGTH_SHORT).show()
             return
         }
         val (wgsLat, wgsLng) = CoordinateConverter.gcj02ToWgs84(c.latitude, c.longitude)
         val cfg = GeofenceConfig(wgsLat, wgsLng, radius)
-        app.transportManager.sendMessage(InkMessage.text(MessageType.GEOFENCE_CONFIG, gson.toJson(cfg)))
+        app.transportManager.sendMessage(
+            InkMessage.text(MessageType.GEOFENCE_CONFIG, gson.toJson(cfg), from = app.deviceId, target = target)
+        )
+        // 主控端记住最后下发的围栏（WGS-84），地图页可视化
+        app.deviceRepository.updateFence(target, wgsLat, wgsLng, radius)
         Toast.makeText(this, R.string.fence_sent, Toast.LENGTH_SHORT).show()
         finish()
     }

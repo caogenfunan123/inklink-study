@@ -47,5 +47,19 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/route_plan" />
+
+        <Button
+            android:id="@+id/btn_history"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/history_track" />
+
+        <Button
+            android:id="@+id/btn_export"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/export_gpx" />
     </LinearLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

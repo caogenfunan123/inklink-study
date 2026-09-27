@@ -63,4 +63,28 @@ class DeviceRepositoryTest {
 
         assertEquals("新名", repo.findByDeviceId("id1")?.nickname)
     }
+
+    @Test
+    fun updateFence_persists() {
+        val repo = DeviceRepository(context)
+        repo.add(DeviceEntity("id1", "手表1"))
+
+        repo.updateFence("id1", 22.5, 113.9, 300.0)
+
+        val device = repo.findByDeviceId("id1")!!
+        assertEquals(22.5, device.fenceLat!!, 1e-9)
+        assertEquals(113.9, device.fenceLng!!, 1e-9)
+        assertEquals(300.0, device.fenceRadiusM!!, 1e-9)
+    }
+
+    @Test
+    fun updateFence_otherDevicesUntouched() {
+        val repo = DeviceRepository(context)
+        repo.add(DeviceEntity("id1", "手表1"))
+        repo.add(DeviceEntity("id2", "手表2"))
+
+        repo.updateFence("id1", 22.5, 113.9, 300.0)
+
+        assertNull(repo.findByDeviceId("id2")?.fenceLat)
+    }
 }

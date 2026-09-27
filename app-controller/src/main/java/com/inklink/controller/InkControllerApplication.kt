@@ -3,7 +3,9 @@ package com.inklink.controller
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.google.gson.Gson
@@ -56,6 +58,9 @@ class InkControllerApplication : Application() {
     val careMonitor by lazy { com.inklink.controller.care.CareMonitor(this) }
     lateinit var deviceRepository: DeviceRepository
         private set
+
+    /** 历史轨迹本地存储：GPS_REPORT 按设备按天落盘 JSONL，供地图回放/GPX 导出。 */
+    val trackStore by lazy { com.inklink.controller.data.TrackStore(this) }
 
     private val gson = Gson()
     private var inCall = false
@@ -314,6 +319,8 @@ class InkControllerApplication : Application() {
                             deviceRepository.add(DeviceEntity(from, ""))
                         }
                         controllerState.setGps(from, gps)
+                        // 历史轨迹落盘（低质量点在 TrackStore 内过滤）
+                        trackStore.append(from, gps)
                     }
             MessageType.DEVICE_STATUS_REPORT ->
                 runCatching { gson.fromJson(message.payload, DeviceStatusPayload::class.java) }
@@ -421,7 +428,7 @@ class InkControllerApplication : Application() {
             message.fromDeviceId
         )
         controllerState.setAlert(info)
-        sendAlertNotification(desc, null)
+        sendAlertNotification(desc, null, message.fromDeviceId)
     }
 
     private fun handleAlert(type: String, message: InkMessage) {
@@ -435,21 +442,40 @@ class InkControllerApplication : Application() {
             message.fromDeviceId
         )
         controllerState.setAlert(info)
-        sendAlertNotification(type, cfg)
+        sendAlertNotification(type, cfg, message.fromDeviceId)
     }
 
-    private fun sendAlertNotification(type: String, cfg: GeofenceConfig?) {
+    /** 围栏/宠物告警系统通知，点击直达地图并聚焦告警设备。 */
+    private fun sendAlertNotification(type: String, cfg: GeofenceConfig?, deviceId: String?) {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !PermissionUtil.hasPermissions(this, android.Manifest.permission.POST_NOTIFICATIONS)
         ) {
             return
         }
-        val text = cfg?.let { "位置: ${it.lat}, ${it.lng}（半径 ${it.radius}m）" } ?: ""
+        val name = deviceId?.let { id ->
+            devices().firstOrNull { it.deviceId == id }?.nickname?.takeIf { it.isNotBlank() } ?: id.take(8)
+        } ?: "受控端"
+        val text = buildString {
+            append(name)
+            cfg?.let { append(" 位置: ${it.lat}, ${it.lng}（半径 ${it.radius}m）") }
+        }
+        val contentIntent = PendingIntent.getActivity(
+            this,
+            // requestCode 绑定设备：多设备先后告警时各自持有 PendingIntent，
+            // 避免同 requestCode+相同 Intent 导致 extras 被覆盖、点击聚焦错设备
+            (deviceId ?: "").hashCode(),
+            Intent(this, com.inklink.controller.ui.MapActivity::class.java)
+                .putExtra(EXTRA_FOCUS_DEVICE, deviceId)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
         val notification = NotificationCompat.Builder(this, ALERT_CHANNEL_ID)
             .setContentTitle("围栏告警：$type")
             .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentIntent(contentIntent)
             .setAutoCancel(true)
             .build()
         nm.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
@@ -469,5 +495,8 @@ class InkControllerApplication : Application() {
 
     companion object {
         private const val ALERT_CHANNEL_ID = "inklink_alert"
+
+        /** 告警通知点击跳转 MapActivity 时聚焦的设备 ID extra。 */
+        const val EXTRA_FOCUS_DEVICE = "extra_focus_device"
     }
 }
