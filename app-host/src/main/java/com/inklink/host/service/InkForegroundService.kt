@@ -64,6 +64,7 @@ class InkForegroundService : Service() {
     private lateinit var deviceId: String
 
     private val geofenceManager = GeoFenceManager(confirmCount = 2)
+    private val geofenceStore by lazy { GeofenceStore(this) }
     private val audioManager = AudioManager()
     private val gson = Gson()
     private var inCall = false
@@ -219,6 +220,14 @@ class InkForegroundService : Service() {
             }
         }
         gpsManager.start()
+        // 恢复上次下发的围栏（GeoFenceManager 仅内存，重启不丢配置）
+        geofenceStore.load()?.let { payload ->
+            runCatching {
+                val cfg = gson.fromJson(payload, GeofenceConfig::class.java)
+                geofenceManager.updateFence(cfg.toGeoFence())
+                hostState.appendLog("恢复围栏: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}m")
+            }
+        }
         UdpDiscovery.startResponder(deviceId, LocalWsTransport.DEFAULT_PORT)
     }
 
@@ -511,6 +520,8 @@ class InkForegroundService : Service() {
     private fun applyGeofence(payload: String?) {
         val cfg = runCatching { gson.fromJson(payload, GeofenceConfig::class.java) }.getOrNull() ?: return
         geofenceManager.updateFence(cfg.toGeoFence())
+        // 落盘：服务/进程重启后恢复（围栏生命周期对齐设备而非进程）
+        payload?.let { geofenceStore.save(it) }
         hostState.appendLog("更新围栏: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}m")
     }
 

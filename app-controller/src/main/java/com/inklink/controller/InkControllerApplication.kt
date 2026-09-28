@@ -428,7 +428,10 @@ class InkControllerApplication : Application() {
             message.fromDeviceId
         )
         controllerState.setAlert(info)
-        sendAlertNotification(desc, null, message.fromDeviceId)
+        // 围栏离开事件受控端会同时发 PET_ALERT_EVENT 与 ALERT_EXIT，系统通知只发后者，避免重复弹两条
+        if (payload?.alertType != "GEOFENCE_EXIT") {
+            sendAlertNotification(desc, null, message.fromDeviceId)
+        }
     }
 
     private fun handleAlert(type: String, message: InkMessage) {
