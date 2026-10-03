@@ -228,7 +228,7 @@ class MapActivity : AppCompatActivity() {
                             .strokeWidth(2f)
                             .fillColor(FENCE_FILL)
                     )
-                }
+                }.toMutableList()
             }
         }
     }

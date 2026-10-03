@@ -490,9 +490,6 @@ class InkForegroundService : Service() {
                 is FenceEvent.Enter -> Unit
             }
         }
-                is FenceEvent.Enter -> Unit
-            }
-        }
         treasureHunter.onLocationUpdate(report)
         if (reportThrottler.shouldReportLocation(report.lat, report.lng)) {
             broadcastGpsReport(report)
