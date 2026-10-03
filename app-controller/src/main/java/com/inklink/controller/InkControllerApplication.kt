@@ -428,9 +428,15 @@ class InkControllerApplication : Application() {
             message.fromDeviceId
         )
         controllerState.setAlert(info)
-        // 围栏离开事件受控端会同时发 PET_ALERT_EVENT 与 ALERT_EXIT，系统通知只发后者，避免重复弹两条
-        if (payload?.alertType != "GEOFENCE_EXIT") {
-            sendAlertNotification(desc, null, message.fromDeviceId)
+        when (payload?.alertType) {
+            // 围栏离开事件受控端会同时发 PET_ALERT_EVENT 与 ALERT_EXIT，系统通知只发后者，避免重复弹两条
+            "GEOFENCE_EXIT" -> Unit
+            // 孩子按下 SOS：自动请求一次最新定位（受控端回 GPS_REPORT），通知文案醒目
+            "SOS" -> {
+                requestGps(message.fromDeviceId)
+                sendAlertNotification("[SOS紧急] ${desc}", null, message.fromDeviceId)
+            }
+            else -> sendAlertNotification(desc, null, message.fromDeviceId)
         }
     }
 

@@ -13,7 +13,7 @@ class GeoFenceManagerTest {
     @Test
     fun `无围栏时无事件`() {
         val manager = GeoFenceManager(confirmCount = 2)
-        assertNull(manager.onLocation(31.0, 121.0))
+        assertTrue(manager.onLocation(31.0, 121.0).isEmpty())
     }
 
     @Test
@@ -22,12 +22,12 @@ class GeoFenceManagerTest {
         manager.updateFence(center)
 
         // 第一次进入候选，未确认
-        assertNull(manager.onLocation(31.2304, 121.4737))
+        assertTrue(manager.onLocation(31.2304, 121.4737).isEmpty())
         assertFalse(manager.isInside())
 
         // 第二次确认，触发 Enter
-        val event = manager.onLocation(31.2304, 121.4737)
-        assertEquals(FenceEvent.Enter(center), event)
+        val events = manager.onLocation(31.2304, 121.4737)
+        assertEquals(listOf(FenceEvent.Enter(center)), events)
         assertTrue(manager.isInside())
     }
 
@@ -39,10 +39,10 @@ class GeoFenceManagerTest {
         manager.onLocation(31.2304, 121.4737)
 
         // 离开候选
-        assertNull(manager.onLocation(31.2400, 121.4800))
+        assertTrue(manager.onLocation(31.2400, 121.4800).isEmpty())
         // 确认离开
-        val event = manager.onLocation(31.2400, 121.4800)
-        assertEquals(FenceEvent.Exit(center), event)
+        val events = manager.onLocation(31.2400, 121.4800)
+        assertEquals(listOf(FenceEvent.Exit(center)), events)
         assertFalse(manager.isInside())
     }
 
@@ -56,8 +56,47 @@ class GeoFenceManagerTest {
         manager.onLocation(31.2400, 121.4800)
         manager.onLocation(31.2304, 121.4737)
 
-        assertNull(manager.onLocation(31.2400, 121.4800))
+        assertTrue(manager.onLocation(31.2400, 121.4800).isEmpty())
         assertFalse(manager.isInside())
+    }
+
+    @Test
+    fun `多围栏独立判定`() {
+        val home = GeoFence(31.2304, 121.4737, 100.0, "家")
+        val school = GeoFence(31.0400, 121.3800, 150.0, "学校")
+        val manager = GeoFenceManager(confirmCount = 2)
+        manager.updateFences(listOf(home, school))
+        assertEquals(listOf(home, school), manager.currentFences())
+
+        // 进入家（两次确认）
+        assertTrue(manager.onLocation(31.2304, 121.4737).isEmpty())
+        assertEquals(listOf(FenceEvent.Enter(home)), manager.onLocation(31.2304, 121.4737))
+        assertTrue(manager.isInside())
+
+        // 同一时刻离开家且进入学校：一次采样产生两个事件
+        val events = manager.onLocation(31.0400, 121.3800)
+        assertEquals(listOf(FenceEvent.Exit(home), FenceEvent.Enter(school)), events)
+        assertTrue(manager.isInside())
+
+        // 离开学校
+        assertEquals(listOf(FenceEvent.Exit(school)), manager.onLocation(31.0500, 121.3900))
+        assertEquals(listOf(FenceEvent.Exit(school)), manager.onLocation(31.0500, 121.3900))
+        assertFalse(manager.isInside())
+    }
+
+    @Test
+    fun `多围栏只影响各自去抖`() {
+        val a = GeoFence(31.2304, 121.4737, 100.0)
+        val b = GeoFence(31.2400, 121.4800, 100.0)
+        val manager = GeoFenceManager(confirmCount = 2)
+        manager.updateFences(listOf(a, b))
+
+        // 进入 a 候选（b 无关）
+        assertTrue(manager.onLocation(31.2304, 121.4737).isEmpty())
+        // 在 b 内的采样不应推进 a 的去抖
+        assertEquals(listOf(FenceEvent.Enter(b)), manager.onLocation(31.2400, 121.4800))
+        // a 第二次确认进入
+        assertEquals(listOf(FenceEvent.Enter(a)), manager.onLocation(31.2304, 121.4737))
     }
 
     @Test

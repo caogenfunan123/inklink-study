@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
+import com.inklink.common.service.geofence.GeofenceConfig
 import com.inklink.common.utils.CoordinateConverter
 import com.inklink.controller.BuildConfig
 import com.inklink.controller.InkControllerApplication
@@ -47,7 +48,7 @@ class MapActivity : AppCompatActivity() {
 
     private val markers = mutableMapOf<String, Marker>()
     private val trajectoryPolylines = mutableMapOf<String, Polyline>()
-    private val fenceCircles = mutableMapOf<String, Circle>()
+    private val fenceCircles = mutableMapOf<String, MutableList<Circle>>()
     private var selfMarker: Marker? = null
     private var routePolyline: Polyline? = null
 
@@ -187,32 +188,47 @@ class MapActivity : AppCompatActivity() {
         } ?: getString(R.string.waiting_gps)
     }
 
-    /** 画出每台已配置围栏设备的围栏圈（本地记录的 WGS-84 转 GCJ-02 显示）。 */
+    /** 画出每台已配置围栏设备的围栏圈（多围栏优先，本地记录的 WGS-84 转 GCJ-02 显示）。 */
     private fun renderFences() {
         val devices = app.devices().associateBy { it.deviceId }
         fenceCircles.keys.filter { id ->
             val d = devices[id]
-            d == null || d.fenceLat == null || d.fenceLng == null || d.fenceRadiusM == null
-        }.forEach { id -> fenceCircles.remove(id)?.remove() }
+            d == null || (d.fences.isNullOrEmpty() &&
+                (d.fenceLat == null || d.fenceLng == null || d.fenceRadiusM == null))
+        }.forEach { id ->
+            fenceCircles.remove(id)?.forEach { it.remove() }
+        }
 
         devices.values.forEach { d ->
-            val lat = d.fenceLat ?: return@forEach
-            val lng = d.fenceLng ?: return@forEach
-            val radius = d.fenceRadiusM ?: return@forEach
-            val (gcjLat, gcjLng) = CoordinateConverter.wgs84ToGcj02(lat, lng)
+            val entries = d.fences?.takeIf { it.isNotEmpty() } ?: listOfNotNull(
+                d.fenceLat?.let { lat ->
+                    d.fenceLng?.let { lng ->
+                        d.fenceRadiusM?.let { r -> GeofenceConfig.FenceEntry(lat, lng, r) }
+                    }
+                }
+            )
+            if (entries.isEmpty()) return@forEach
+
             val existing = fenceCircles[d.deviceId]
-            if (existing == null) {
-                fenceCircles[d.deviceId] = tencentMap.addCircle(
-                    CircleOptions()
-                        .center(LatLng(gcjLat, gcjLng))
-                        .radius(radius)
-                        .strokeColor(FENCE_COLOR)
-                        .strokeWidth(2f)
-                        .fillColor(FENCE_FILL)
-                )
+            if (existing != null && existing.size == entries.size) {
+                entries.forEachIndexed { i, e ->
+                    val (gcjLat, gcjLng) = CoordinateConverter.wgs84ToGcj02(e.lat, e.lng)
+                    existing[i].center = LatLng(gcjLat, gcjLng)
+                    existing[i].radius = e.radius
+                }
             } else {
-                existing.center = LatLng(gcjLat, gcjLng)
-                existing.radius = radius
+                fenceCircles.remove(d.deviceId)?.forEach { it.remove() }
+                fenceCircles[d.deviceId] = entries.map { e ->
+                    val (gcjLat, gcjLng) = CoordinateConverter.wgs84ToGcj02(e.lat, e.lng)
+                    tencentMap.addCircle(
+                        CircleOptions()
+                            .center(LatLng(gcjLat, gcjLng))
+                            .radius(e.radius)
+                            .strokeColor(FENCE_COLOR)
+                            .strokeWidth(2f)
+                            .fillColor(FENCE_FILL)
+                    )
+                }
             }
         }
     }

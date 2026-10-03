@@ -92,10 +92,13 @@ class PetMainActivity : AppCompatActivity() {
     private lateinit var btnAchieve: MaterialButton
     private lateinit var btnFamily: MaterialButton
     private lateinit var btnAppearance: MaterialButton
+    private lateinit var btnSos: MaterialButton
     private lateinit var rootContainer: View
 
     private var aiEngine: PetAiEngine? = null
     private var petGestureDetector: android.view.GestureDetector? = null
+    // SOS 发送冷却（10s 防连点刷屏）
+    private var lastSosSentAt = 0L
 
     // 抚摸（长按）连击节流
     private var lastAffectionTs = 0L
@@ -240,6 +243,7 @@ class PetMainActivity : AppCompatActivity() {
         btnAchieve = findViewById(R.id.btnAchieve)
         btnFamily = findViewById(R.id.btnFamily)
         btnAppearance = findViewById(R.id.btnAppearance)
+        btnSos = findViewById(R.id.btnSos)
 
         progressHunger.color = 0xFFFF7043.toInt()
         progressHappiness.color = 0xFFEC407A.toInt()
@@ -591,6 +595,44 @@ class PetMainActivity : AppCompatActivity() {
             speakGuide("家长管控：查看宠物数据与设置，需要输入管理密码。")
             true
         }
+
+        // SOS 紧急求助：点击确认后向主控端发 PET_ALERT_EVENT(SOS)，主控端自动请求最新定位
+        btnSos.setOnClickListener {
+            HapticUtil.tap(it)
+            showSosConfirmDialog()
+        }
+    }
+
+    /** SOS 二次确认防误触；发送后 10s 冷却，防止连点刷屏。 */
+    private fun showSosConfirmDialog() {
+        if (System.currentTimeMillis() - lastSosSentAt < 10_000L) {
+            PixelToast.show(rootContainer, "刚刚已经呼叫过啦，请等爸爸妈妈回应")
+            return
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("紧急呼叫")
+            .setMessage("确定要让爸爸妈妈马上知道你在哪里吗？")
+            .setPositiveButton("确定呼叫") { _, _ ->
+                val app = application as com.inklink.host.InkHostApplication
+                val payload = com.inklink.common.protocol.payload.PetAlertEventPayload(
+                    alertType = "SOS",
+                    description = "孩子按下了紧急求助按钮"
+                )
+                app.transportManager.sendMessage(
+                    com.inklink.common.protocol.InkMessage(
+                        type = com.inklink.common.protocol.MessageType.PET_ALERT_EVENT.code,
+                        fromDeviceId = app.deviceId,
+                        targetDeviceId = app.transportManager.defaultTargetDeviceId,
+                        payload = com.google.gson.Gson().toJson(payload)
+                    )
+                )
+                lastSosSentAt = System.currentTimeMillis()
+                PixelToast.show(rootContainer, "已经告诉爸爸妈妈了，别害怕")
+                localTtsManager.speak("已经呼叫爸爸妈妈了，别害怕，待在原地不要乱走")
+                petStateManager.addReward(5, 5)
+            }
+            .setNegativeButton("再想想", null)
+            .show()
     }
 
     /** 受控端直接选择宠物外观；仅改变渲染偏好，不触碰养成数据。 */

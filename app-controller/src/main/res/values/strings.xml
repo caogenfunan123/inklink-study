@@ -27,7 +27,16 @@
     <string name="radius_label">围栏半径: %1$d 米</string>
     <string name="pick_center">请先点击地图选择圆心</string>
     <string name="fence_sent">围栏已下发</string>
-    <string name="submit_fence">下发围栏</string>
+    <string name="submit_fence">下发全部围栏</string>
+    <string name="add_fence">添加围栏</string>
+    <string name="clear_fences">清空</string>
+    <string name="fence_name_hint">围栏名称（如：家）</string>
+    <string name="fence_added">已添加，可继续点选地图添加更多</string>
+    <string name="fence_list_empty">尚未添加围栏</string>
+    <string name="fence_list_label">已添加围栏：</string>
+    <string name="fence_deleted">已删除该围栏</string>
+    <string name="fence_cleared">已清空围栏列表</string>
+    <string name="remove_fence">删除围栏</string>
     <string name="mode_local">局域网直连</string>
     <string name="mode_relay">公网服务器中转</string>
     <string name="mode_ably">Ably 中转（4G-4G 原型）</string>

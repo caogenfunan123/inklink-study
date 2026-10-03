@@ -56,6 +56,23 @@ class DeviceRepository(context: Context) {
         })
     }
 
+    /** 记录设备最后一次下发的多围栏列表（WGS-84），第 0 个为主围栏。 */
+    fun updateFences(deviceId: String, fences: List<GeofenceConfig.FenceEntry>) {
+        require(fences.isNotEmpty()) { "围栏列表不能为空" }
+        save(list().map {
+            if (it.deviceId == deviceId) {
+                it.copy(
+                    fenceLat = fences[0].lat,
+                    fenceLng = fences[0].lng,
+                    fenceRadiusM = fences[0].radius,
+                    fences = fences
+                )
+            } else {
+                it
+            }
+        })
+    }
+
     private fun save(devices: List<DeviceEntity>) {
         prefs.edit().putString(KEY_DEVICES, gson.toJson(devices)).apply()
     }

@@ -224,8 +224,9 @@ class InkForegroundService : Service() {
         geofenceStore.load()?.let { payload ->
             runCatching {
                 val cfg = gson.fromJson(payload, GeofenceConfig::class.java)
-                geofenceManager.updateFence(cfg.toGeoFence())
-                hostState.appendLog("恢复围栏: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}m")
+                val fences = cfg.toGeoFences()
+                geofenceManager.updateFences(fences)
+                hostState.appendLog("恢复围栏 ${fences.size} 个: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}m")
             }
         }
         UdpDiscovery.startResponder(deviceId, LocalWsTransport.DEFAULT_PORT)
@@ -466,39 +467,48 @@ class InkForegroundService : Service() {
     }
 
     private fun onGpsLocation(report: GpsReport) {
-        val fenceEvent = geofenceManager.onLocation(report.lat, report.lng)
-        if (fenceEvent is FenceEvent.Exit) {
-            hostState.appendLog("⚠️ 触发电子围栏离开警报！")
-            _petEventFlow.tryEmit(PetUiEvent.AlertTriggered)
-            val alertPayload = com.inklink.common.protocol.payload.PetAlertEventPayload(
-                alertType = "GEOFENCE_EXIT",
-                description = "受控端越出安全围栏"
-            )
-            transportManager.sendMessage(
-                InkMessage(
-                    type = MessageType.PET_ALERT_EVENT.code,
-                    fromDeviceId = deviceId,
-                    targetDeviceId = transportManager.defaultTargetDeviceId,
-                    payload = gson.toJson(alertPayload)
-                )
-            )
+        val fenceEvents = geofenceManager.onLocation(report.lat, report.lng)
+        for (fenceEvent in fenceEvents) {
+            when (fenceEvent) {
+                is FenceEvent.Exit -> {
+                    val fenceName = fenceEvent.fence.name
+                    hostState.appendLog("⚠️ 触发电子围栏离开警报${fenceName?.let { "[$it]" } ?: ""}！")
+                    _petEventFlow.tryEmit(PetUiEvent.AlertTriggered)
+                    val alertPayload = com.inklink.common.protocol.payload.PetAlertEventPayload(
+                        alertType = "GEOFENCE_EXIT",
+                        description = if (fenceName != null) "受控端越出安全围栏[$fenceName]" else "受控端越出安全围栏"
+                    )
+                    transportManager.sendMessage(
+                        InkMessage(
+                            type = MessageType.PET_ALERT_EVENT.code,
+                            fromDeviceId = deviceId,
+                            targetDeviceId = transportManager.defaultTargetDeviceId,
+                            payload = gson.toJson(alertPayload)
+                        )
+                    )
+                }
+                is FenceEvent.Enter -> Unit
+            }
+        }
+                is FenceEvent.Enter -> Unit
+            }
         }
         treasureHunter.onLocationUpdate(report)
         if (reportThrottler.shouldReportLocation(report.lat, report.lng)) {
             broadcastGpsReport(report)
         }
-        fenceEvent?.let { event ->
+        for (event in fenceEvents) {
             acquireTemporaryWakeLock(2000L)
             when (event) {
                 is FenceEvent.Enter -> {
                     val cfg = gson.toJson(GeofenceConfig.from(event.fence))
                     transportManager.sendMessage(InkMessage.text(MessageType.ALERT_ENTER, cfg, from = deviceId))
-                    hostState.appendLog("进入围栏区域")
+                    hostState.appendLog("进入围栏区域${event.fence.name?.let { "[$it]" } ?: ""}")
                 }
                 is FenceEvent.Exit -> {
                     val cfg = gson.toJson(GeofenceConfig.from(event.fence))
                     transportManager.sendMessage(InkMessage.text(MessageType.ALERT_EXIT, cfg, from = deviceId))
-                    hostState.appendLog("离开围栏区域")
+                    hostState.appendLog("离开围栏区域${event.fence.name?.let { "[$it]" } ?: ""}")
                 }
             }
         }
@@ -519,10 +529,11 @@ class InkForegroundService : Service() {
 
     private fun applyGeofence(payload: String?) {
         val cfg = runCatching { gson.fromJson(payload, GeofenceConfig::class.java) }.getOrNull() ?: return
-        geofenceManager.updateFence(cfg.toGeoFence())
+        val fences = cfg.toGeoFences()
+        geofenceManager.updateFences(fences)
         // 落盘：服务/进程重启后恢复（围栏生命周期对齐设备而非进程）
         payload?.let { geofenceStore.save(it) }
-        hostState.appendLog("更新围栏: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}m")
+        hostState.appendLog("更新围栏 ${fences.size} 个: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}m")
     }
 
     private fun onAudioStart() {

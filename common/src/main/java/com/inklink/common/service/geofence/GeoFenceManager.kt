@@ -14,61 +14,74 @@ sealed class FenceEvent {
 }
 
 /**
- * 本地电子围栏管理器。
+ * 本地电子围栏管理器（支持多围栏）。
  *
  * 基于 Haversine 距离计算判定进出（避免依赖 Google Geofencing API，兼容国产设备）。
- * 带去抖逻辑：状态翻转需连续 [confirmCount] 次采样确认，防止 GPS 抖动触发重复告警。
+ * 每个围栏独立维护进出状态与去抖计数：状态翻转需连续 [confirmCount] 次采样确认，
+ * 防止 GPS 抖动触发重复告警。
  */
 class GeoFenceManager(
     private val confirmCount: Int = 2
 ) {
 
-    private var fence: GeoFence? = null
-    private var inside: Boolean = false
-    private var pendingState: Boolean? = null
-    private var pendingHits: Int = 0
+    private class FenceState(val fence: GeoFence) {
+        var inside = false
+        var pendingState: Boolean? = null
+        var pendingHits = 0
 
-    /** 更新围栏配置，重置去抖状态。 */
-    fun updateFence(fence: GeoFence?) {
-        this.fence = fence
-        this.inside = false
-        resetPending()
+        fun resetPending() {
+            pendingState = null
+            pendingHits = 0
+        }
     }
 
-    fun currentFence(): GeoFence? = fence
+    private var states: List<FenceState> = emptyList()
 
-    fun isInside(): Boolean = inside
+    /** 更新围栏配置（多围栏），重置去抖状态。 */
+    fun updateFences(fences: List<GeoFence>) {
+        states = fences.map { FenceState(it) }
+    }
+
+    /** 单围栏兼容入口。传 null 清空围栏。 */
+    fun updateFence(fence: GeoFence?) {
+        updateFences(fence?.let { listOf(it) } ?: emptyList())
+    }
+
+    fun currentFences(): List<GeoFence> = states.map { it.fence }
+
+    fun currentFence(): GeoFence? = states.firstOrNull()?.fence
+
+    /** 是否处于任一围栏内。 */
+    fun isInside(): Boolean = states.any { it.inside }
 
     /**
-     * 输入一次定位，返回本次采样触发的进出事件（去抖确认后），无事件返回 null。
+     * 输入一次定位，返回本次采样触发的全部进出事件（去抖确认后），无事件返回空列表。
      */
-    fun onLocation(latitude: Double, longitude: Double): FenceEvent? {
-        val f = fence ?: return null
-        val nowInside = distanceMeters(latitude, longitude, f.latitude, f.longitude) <= f.radiusMeters
+    fun onLocation(latitude: Double, longitude: Double): List<FenceEvent> {
+        val events = mutableListOf<FenceEvent>()
+        for (state in states) {
+            val f = state.fence
+            val nowInside = distanceMeters(latitude, longitude, f.latitude, f.longitude) <= f.radiusMeters
 
-        if (nowInside == inside) {
-            resetPending()
-            return null
+            if (nowInside == state.inside) {
+                state.resetPending()
+                continue
+            }
+
+            if (state.pendingState != nowInside) {
+                state.pendingState = nowInside
+                state.pendingHits = 1
+            } else {
+                state.pendingHits++
+            }
+
+            if (state.pendingHits >= confirmCount) {
+                state.inside = nowInside
+                state.resetPending()
+                events.add(if (nowInside) FenceEvent.Enter(f) else FenceEvent.Exit(f))
+            }
         }
-
-        if (pendingState != nowInside) {
-            pendingState = nowInside
-            pendingHits = 1
-        } else {
-            pendingHits++
-        }
-
-        if (pendingHits >= confirmCount) {
-            inside = nowInside
-            resetPending()
-            return if (nowInside) FenceEvent.Enter(f) else FenceEvent.Exit(f)
-        }
-        return null
-    }
-
-    private fun resetPending() {
-        pendingState = null
-        pendingHits = 0
+        return events
     }
 
     companion object {
