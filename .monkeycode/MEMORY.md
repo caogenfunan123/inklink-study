@@ -40,6 +40,8 @@ Entries discovered by the Agent during task execution should follow this format:
   - 用户会提供 GitHub PAT（聊天中给出）；token 只允许写入 /tmp 临时文件使用（chmod 600），严禁写入仓库任何文件或 MEMORY；用完建议用户轮换
   - 推送输出必须 sed 脱敏 token；git push 形式 `git push https://x-access-token:${TOKEN}@github.com/caogenfunan123/inklink-study.git master:master`
   - CI 单测门禁覆盖 :app-host 与 :app-controller 两模块（2026-09-27 起含 TrackStore 等新用例）
+  - CI 失败排查路径：`curl -sL -H "Authorization: token $TOKEN" https://api.github.com/repos/caogenfunan123/inklink-study/actions/runs/<run_id>/logs` 下载 zip 解压后 rg "e: |FAILED" build/5_*.txt（编译错误集中在 :app-host:kspDebugKotlin / :app-controller:compileDebugKotlin）（2026-10-03）
+  - 编辑器对大文件（千行级 Kotlin）做 edit 替换时可能残留旧代码片段导致语法错误；push 前必须回读修改段落复查（2026-10-03 CI 连败两次的根因之一）
 
 [InkLink 仓库生态与签名体系]
 - Date: 2026-09-27
