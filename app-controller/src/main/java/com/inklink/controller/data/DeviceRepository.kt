@@ -3,6 +3,7 @@ package com.inklink.controller.data
 import android.content.Context
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import com.inklink.common.service.geofence.GeofenceConfig
 
 /**
  * 受控端设备列表本地存储（SharedPreferences + JSON）。

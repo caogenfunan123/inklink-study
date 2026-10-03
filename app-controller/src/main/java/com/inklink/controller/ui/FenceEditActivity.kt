@@ -15,6 +15,7 @@ import com.google.gson.Gson
 import com.inklink.common.protocol.InkMessage
 import com.inklink.common.protocol.MessageType
 import com.inklink.common.service.geofence.GeofenceConfig
+import com.inklink.common.service.geofence.GeoFence
 import com.inklink.common.utils.CoordinateConverter
 import com.inklink.controller.InkControllerApplication
 import com.inklink.controller.R
@@ -249,7 +250,8 @@ class FenceEditActivity : AppCompatActivity(), TencentMap.OnMapClickListener {
             Toast.makeText(this, R.string.no_target_selected, Toast.LENGTH_SHORT).show()
             return
         }
-        val cfg = GeofenceConfig.fromList(pendingFences)
+        val geoFences = pendingFences.map { GeoFence(it.lat, it.lng, it.radius, it.name) }
+        val cfg = GeofenceConfig.fromList(geoFences)
         app.transportManager.sendMessage(
             InkMessage.text(MessageType.GEOFENCE_CONFIG, gson.toJson(cfg), from = app.deviceId, target = target)
         )
