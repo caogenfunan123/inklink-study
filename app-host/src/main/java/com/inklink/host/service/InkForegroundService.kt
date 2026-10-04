@@ -79,6 +79,8 @@ class InkForegroundService : Service() {
      */
     private val eventSemanticGuard = IdempotentController(maxCapacity = 64, ttlMs = 10_000L)
     private val reportThrottler = ReportThrottler(minLocationDistanceMeters = 8.0, minLocationIntervalMs = 5_000L)
+    private val trackLogger by lazy { com.inklink.host.data.GpsTrackLogger(this) }
+    private val historyServer by lazy { HistoryServer(trackLogger) }
     private lateinit var treasureHunter: com.inklink.host.state.GpsTreasureHunter
     private val offlineEventQueue by lazy { com.inklink.host.queue.OfflineEventQueue(this) }
     private var pingJob: kotlinx.coroutines.Job? = null
@@ -244,6 +246,8 @@ class InkForegroundService : Service() {
         // 只放播放器（MediaPlayer）；TTS 单例留给 UI/广播接收器，服务重建时不必重新 bind 引擎
         audioFeedback?.stopAll()
         audioFeedback = null
+        // 轨迹内存缓冲强制落盘，避免丢最后 30s 数据
+        runCatching { trackLogger.flush() }
         UdpDiscovery.stopResponder()
         transportManager.disconnect()
         hostState.appendLog("前台服务停止")
@@ -493,6 +497,8 @@ class InkForegroundService : Service() {
         treasureHunter.onLocationUpdate(report)
         if (reportThrottler.shouldReportLocation(report.lat, report.lng)) {
             broadcastGpsReport(report)
+            // 离线补传数据源：与上报同节流点落盘（静止不写、漂移点丢弃）
+            trackLogger.append(report)
         }
         for (event in fenceEvents) {
             acquireTemporaryWakeLock(2000L)
