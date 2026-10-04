@@ -62,6 +62,28 @@ class InkControllerApplication : Application() {
     /** 历史轨迹本地存储：GPS_REPORT 按设备按天落盘 JSONL，供地图回放/GPX 导出。 */
     val trackStore by lazy { com.inklink.controller.data.TrackStore(this) }
 
+    /** 离线历史轨迹拉取客户端（断点续传），依赖 trackStore 与 controllerState。 */
+    val historyClient by lazy {
+        com.inklink.controller.data.HistoryClient(trackStore, controllerState).apply {
+            bindSenders(
+                requestSender = { target, reqId, startTs, endTs, acked ->
+                    val payload = com.inklink.common.protocol.payload.HistoryRequestPayload(
+                        reqId = reqId, startTs = startTs, endTs = endTs, acked = acked
+                    )
+                    transportManager.sendMessage(
+                        InkMessage.text(MessageType.HISTORY_REQUEST, gson.toJson(payload), from = deviceId, target = target)
+                    )
+                },
+                ackSender = { target, reqId, seq ->
+                    val payload = com.inklink.common.protocol.payload.HistoryAckPayload(reqId = reqId, seq = seq)
+                    transportManager.sendMessage(
+                        InkMessage.text(MessageType.HISTORY_ACK, gson.toJson(payload), from = deviceId, target = target)
+                    )
+                }
+            )
+        }
+    }
+
     private val gson = Gson()
     private var inCall = false
 
@@ -265,6 +287,16 @@ class InkControllerApplication : Application() {
         controllerState.selectDevice(deviceId)
     }
 
+    /** 发起历史轨迹拉取（最近 [days] 天，1-30），进度见 controllerState.historyProgress。 */
+    fun requestHistory(deviceId: String, days: Int) {
+        historyClient.start(deviceId, days)
+    }
+
+    /** 取消进行中的历史轨迹拉取。 */
+    fun cancelHistory() {
+        historyClient.cancel()
+    }
+
     fun devices(): List<DeviceEntity> = deviceRepository.list()
 
     fun addDevice(deviceId: String, nickname: String) =
@@ -356,6 +388,10 @@ class InkControllerApplication : Application() {
             }
             MessageType.ALERT_ENTER -> handleAlert("进入围栏", message)
             MessageType.ALERT_EXIT -> handleAlert("离开围栏", message)
+            MessageType.HISTORY_CHUNK ->
+                runCatching {
+                    gson.fromJson(message.payload, com.inklink.common.protocol.payload.HistoryChunkPayload::class.java)
+                }.getOrNull()?.let { historyClient.onChunk(message.fromDeviceId, it) }
             MessageType.PET_ALERT_EVENT -> handlePetAlert(message)
             MessageType.LEARN_PROGRESS -> handleLearnProgress(message)
             MessageType.AUDIO_START -> onAudioStartConfirmed()

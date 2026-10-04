@@ -28,8 +28,30 @@ class DeviceManageActivity : AppCompatActivity() {
     private lateinit var tvSelected: TextView
 
     private val listener = object : ControllerState.Listener {
-        override fun onStateChanged() = render()
+        override fun onStateChanged() {
+            render()
+            // 历史拉取进度：完成/失败弹提示（用 lastNotifiedReqId 防同一任务重复弹）
+            val progress = state.historyProgress ?: return
+            if (progress.reqId == lastNotifiedReqId) return
+            if (progress.done) {
+                lastNotifiedReqId = progress.reqId
+                Toast.makeText(
+                    this@DeviceManageActivity,
+                    getString(R.string.fetch_history_done, progress.inserted),
+                    Toast.LENGTH_LONG
+                ).show()
+            } else if (progress.failed) {
+                lastNotifiedReqId = progress.reqId
+                Toast.makeText(
+                    this@DeviceManageActivity,
+                    getString(R.string.fetch_history_failed, progress.failedReason ?: ""),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
+
+    private var lastNotifiedReqId: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -128,7 +150,8 @@ class DeviceManageActivity : AppCompatActivity() {
     private fun showDeviceActions(device: DeviceEntity) {
         val items = arrayOf(
             getString(R.string.edit_nickname),
-            getString(R.string.delete)
+            getString(R.string.delete),
+            getString(R.string.fetch_history)
         )
         AlertDialog.Builder(this)
             .setTitle(device.nickname.ifBlank { device.deviceId.take(8) })
@@ -139,8 +162,23 @@ class DeviceManageActivity : AppCompatActivity() {
                         app.removeDevice(device.deviceId)
                         render()
                     }
+                    2 -> showHistoryFetchDialog(device)
                 }
             }
+            .show()
+    }
+
+    /** 选择拉取时长并发起补传；进度与结果由 [onStateChanged] 中的 historyProgress 观察提示。 */
+    private fun showHistoryFetchDialog(device: DeviceEntity) {
+        val options = arrayOf("最近 1 天", "最近 3 天", "最近 7 天")
+        val days = intArrayOf(1, 3, 7)
+        AlertDialog.Builder(this)
+            .setTitle(getString(R.string.fetch_history_title, device.nickname.ifBlank { device.deviceId.take(8) }))
+            .setItems(options) { _, which ->
+                app.requestHistory(device.deviceId, days[which])
+                Toast.makeText(this, R.string.fetch_history_started, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 

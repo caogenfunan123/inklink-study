@@ -29,6 +29,20 @@ enum class DeviceOnlineState {
 }
 
 /**
+ * 历史轨迹拉取进度（HISTORY_REQUEST/CHUNK/ACK 53-55）。
+ */
+data class HistoryProgress(
+    val deviceId: String,
+    val reqId: String,
+    val received: Int,
+    val total: Int,
+    val inserted: Int = 0,
+    val done: Boolean = false,
+    val failed: Boolean = false,
+    val failedReason: String? = null
+)
+
+/**
  * 主控端共享状态。
  */
 class ControllerState {
@@ -88,6 +102,16 @@ class ControllerState {
     /** 当前选中的目标设备。 */
     var selectedDeviceId: String? = null
         private set
+
+    /** 历史轨迹拉取进度（单并发：同一时刻至多一个拉取任务）。 */
+    @Volatile
+    var historyProgress: HistoryProgress? = null
+        private set
+
+    fun setHistoryProgress(progress: HistoryProgress?) {
+        historyProgress = progress
+        notifyChanged()
+    }
 
     /** 学习简报落状态(主线程回调刷新卡片)。 */
     fun setLearnSummary(deviceId: String, summary: String) {

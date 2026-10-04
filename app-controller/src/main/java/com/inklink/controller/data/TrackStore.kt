@@ -57,6 +57,48 @@ class TrackStore(context: Context) {
         }
     }
 
+    /**
+     * 批量合并轨迹点（离线补传去重写入）：按点自身时间戳分日期文件，
+     * 与既有文件内时间戳重复的点跳过，返回实际新增点数（异步完成）。
+     * 低质量点（accuracy 上限）与批次内重复点同样丢弃。
+     */
+    fun appendPoints(deviceId: String, points: List<TrackPoint>, onDone: (Int) -> Unit = {}) {
+        if (points.isEmpty()) {
+            onDone(0)
+            return
+        }
+        io.execute {
+            val inserted = runCatching {
+                val dir = File(root, sanitize(deviceId))
+                dir.mkdirs()
+                var count = 0
+                points.groupBy { dayFormat(it.t) }.forEach { (day, dayPoints) ->
+                    val f = File(dir, "$day.jsonl")
+                    val existing = if (f.isFile) {
+                        f.readLines().mapNotNull { line ->
+                            line.takeIf { it.isNotBlank() }?.let {
+                                runCatching { gson.fromJson(it, TrackPoint::class.java) }.getOrNull()?.t
+                            }
+                        }.toHashSet()
+                    } else {
+                        HashSet()
+                    }
+                    val seenInBatch = HashSet<Long>()
+                    val sb = StringBuilder()
+                    dayPoints.forEach { p ->
+                        if (p.ac > MAX_ACCURACY_METERS) return@forEach
+                        if (p.t in existing || !seenInBatch.add(p.t)) return@forEach
+                        sb.append(gson.toJson(p)).append('\n')
+                        count++
+                    }
+                    if (sb.isNotEmpty()) f.appendText(sb.toString())
+                }
+                count
+            }.getOrDefault(0)
+            onDone(inserted)
+        }
+    }
+
     /** 返回有轨迹数据的日期列表（yyyyMMdd，最新在前）。 */
     fun listDays(deviceId: String): List<String> =
         File(root, sanitize(deviceId))
@@ -76,6 +118,10 @@ class TrackStore(context: Context) {
             }
         }
     }
+
+    /** 设备全部轨迹点总数（跨天求和，仅供单测/统计，同步 IO）。 */
+    fun totalPoints(deviceId: String): Int =
+        listDays(deviceId).sumOf { day -> readDay(deviceId, day).size }
 
     /** 导出某天轨迹为 GPX 1.1 文件，返回文件；当天无数据返回 null。 */
     fun exportGpx(deviceId: String, day: String): File? {
