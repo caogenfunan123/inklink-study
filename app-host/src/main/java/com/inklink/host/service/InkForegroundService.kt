@@ -81,6 +81,9 @@ class InkForegroundService : Service() {
     private val reportThrottler = ReportThrottler(minLocationDistanceMeters = 8.0, minLocationIntervalMs = 5_000L)
     private val trackLogger by lazy { com.inklink.host.data.GpsTrackLogger(this) }
     private val historyServer by lazy { HistoryServer(trackLogger) }
+
+    /** 历史补传专用单线程（串行化请求处理，内部有逐块发送间隔，禁止跑主线程）。 */
+    private val historyExecutor = java.util.concurrent.Executors.newSingleThreadExecutor()
     private lateinit var treasureHunter: com.inklink.host.state.GpsTreasureHunter
     private val offlineEventQueue by lazy { com.inklink.host.queue.OfflineEventQueue(this) }
     private var pingJob: kotlinx.coroutines.Job? = null
@@ -222,6 +225,12 @@ class InkForegroundService : Service() {
             }
         }
         gpsManager.start()
+        // 历史轨迹补传：分块发送通道绑定（定向回传给请求发起的主控端）
+        historyServer.bindSender { target, chunk ->
+            transportManager.sendMessage(
+                InkMessage.text(MessageType.HISTORY_CHUNK, gson.toJson(chunk), from = deviceId, target = target)
+            )
+        }
         // 恢复上次下发的围栏（GeoFenceManager 仅内存，重启不丢配置）
         geofenceStore.load()?.let { payload ->
             runCatching {
@@ -303,6 +312,12 @@ class InkForegroundService : Service() {
             MessageType.REQUEST_GPS -> onRequestGps()
             MessageType.CMD_RING -> onCommandRing(message)
             MessageType.CMD_STOP_RING -> onCommandStopRing(message)
+            MessageType.HISTORY_REQUEST -> onHistoryRequest(message)
+            MessageType.HISTORY_ACK -> {
+                runCatching {
+                    gson.fromJson(message.payload, com.inklink.common.protocol.payload.HistoryAckPayload::class.java)
+                }.getOrNull()?.let { historyServer.onAck(it.reqId) }
+            }
             MessageType.PUSH_ALERT -> onPushAlert(message)
             MessageType.PET_INTERACT_CMD -> onPetInteractCommand(message)
             MessageType.CMD_PLAY_SOUND -> onPlaySoundCommand(message)
@@ -530,8 +545,20 @@ class InkForegroundService : Service() {
         }
     }
 
-    private fun applyGeofence(payload: String?) {
-        val cfg = runCatching { gson.fromJson(payload, GeofenceConfig::class.java) }.getOrNull() ?: return
+    /** 主控端拉取历史轨迹：后台线程处理，逐块回传（断点续传见 HistoryServer）。 */
+    private fun onHistoryRequest(message: InkMessage) {
+        val payload = runCatching {
+            gson.fromJson(message.payload, com.inklink.common.protocol.payload.HistoryRequestPayload::class.java)
+        }.getOrNull() ?: return
+        historyExecutor.execute {
+            runCatching {
+                val sent = historyServer.handleRequest(payload, message.fromDeviceId)
+                hostState.appendLog("历史补传: reqId=${payload.reqId.take(8)} 补发 $sent 块")
+            }.onFailure { hostState.appendLog("历史补传失败: ${it.message}") }
+        }
+    }
+
+    private fun applyGeofence(payload: String?) {        val cfg = runCatching { gson.fromJson(payload, GeofenceConfig::class.java) }.getOrNull() ?: return
         val fences = cfg.toGeoFences()
         geofenceManager.updateFences(fences)
         // 落盘：服务/进程重启后恢复（围栏生命周期对齐设备而非进程）

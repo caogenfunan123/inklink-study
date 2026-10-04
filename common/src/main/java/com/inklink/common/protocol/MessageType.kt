@@ -64,6 +64,13 @@ enum class MessageType(val code: Int) {
     HOMEWORK_ASSIGN(48),
     HOMEWORK_ACK(49),
 
+    // 历史轨迹补传 (53-55)：受控端落盘轨迹 → 主控端按时间范围拉取
+    // 断点续传：分块由受控端确定性生成（同输入同分块），主控端在 REQUEST.acked
+    // 带已收序号重发请求即可补齐缺失块，受控端无需持久化传输状态
+    HISTORY_REQUEST(53),
+    HISTORY_CHUNK(54),
+    HISTORY_ACK(55),
+
     HEARTBEAT(99);
 
     companion object {
