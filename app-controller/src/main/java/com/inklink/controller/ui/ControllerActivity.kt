@@ -301,6 +301,7 @@ class ControllerActivity : AppCompatActivity() {
             TransportMode.LOCAL -> "局域网直连"
             TransportMode.RELAY -> "服务器中转"
             TransportMode.ABLY -> "Ably 4G 中转"
+            else -> "未连接"
         }
         val statusText = if (connected) "已连接 ($modeLabel)" else "未连接"
         val targetNickname = state.selectedDeviceId?.let { id ->

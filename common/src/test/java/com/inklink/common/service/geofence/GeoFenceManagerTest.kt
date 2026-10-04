@@ -98,9 +98,13 @@ class GeoFenceManagerTest {
         assertTrue(manager.onLocation(31.2400, 121.4800).isEmpty())
         // b 第二次确认 → Enter(b)
         assertEquals(listOf(FenceEvent.Enter(b)), manager.onLocation(31.2400, 121.4800))
-        // a 仍需自己的两次连续确认
+        // a 仍需自己的两次连续确认：第 4 次采样只建立候选
         assertTrue(manager.onLocation(31.2304, 121.4737).isEmpty())
-        assertEquals(listOf(FenceEvent.Enter(a)), manager.onLocation(31.2304, 121.4737))
+        // 第 5 次采样确认 Enter(a)；同一次采样里持续远离 b 也凑满 b 的两次退出确认 → Exit(b)
+        assertEquals(
+            listOf(FenceEvent.Enter(a), FenceEvent.Exit(b)),
+            manager.onLocation(31.2304, 121.4737)
+        )
         assertTrue(manager.isInside())
     }
 
