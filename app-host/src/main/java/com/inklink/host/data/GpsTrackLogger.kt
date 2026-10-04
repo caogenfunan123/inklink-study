@@ -39,8 +39,8 @@ class GpsTrackLogger(context: Context) {
     private val buffer = LinkedHashMap<String, StringBuilder>()
     private val lock = Any()
 
-    /** 单线程串行写，避免并发追加错行。 */
-    private val io = Executors.newSingleThreadExecutor()
+    /** 单线程串行写，避免并发追加错行；定时 flush 需调度能力。 */
+    private val io = Executors.newSingleThreadScheduledExecutor()
 
     init {
         root.mkdirs()

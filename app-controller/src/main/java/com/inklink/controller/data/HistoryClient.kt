@@ -37,7 +37,7 @@ class HistoryClient(
     /** ACK 回调：(deviceId, reqId, seq)。 */
     private var ackSender: ((String, String, Int) -> Unit)? = null
 
-    private val io = Executors.newSingleThreadExecutor()
+    private val io = Executors.newSingleThreadScheduledExecutor()
 
     /** 当前任务状态（仅 io 线程访问）。 */
     private var current: Task? = null
