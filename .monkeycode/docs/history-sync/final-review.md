@@ -47,6 +47,20 @@
 
 - GpsTrackLoggerTest 5 例 + HistoryServerTest 5 例（受控端）+ TrackStoreMergeTest 6 例 + HistoryClientTest 7 例（主控端），含 round-trip 契约、空块完成、停滞重传带 acked、取消、seq 去重、内容去重
 
+## 推送后 CI 发现的问题（已修复，commit 9e00beb/6cac652）
+
+复盘与本地审查均未覆盖编译期与渲染期问题，两条均由 CI/自查在推送后抓出：
+
+1. **[blocker] ExecutorService 类型错误**（GpsTrackLogger:48 / HistoryClient:70）：`Executors.newSingleThreadExecutor()` 返回 `ExecutorService`，没有 `scheduleWithFixedDelay`（属 `ScheduledExecutorService`）→ 两个模块 compileDebugKotlin 全挂。这是本代码首次上 CI（A-D 一直本地未推），类型问题从批次 A 起潜伏。修复：两处改 `newSingleThreadScheduledExecutor()`（execute/submit/shutdown 接口不变）
+2. **[major] 空按钮**（activity_device_detail.xml）：btn_fence/btn_track/btn_fetch_history 布局未设 android:text、代码也未 setText → 渲染成无文字按钮。修复：XML 绑定 edit_fence/fetch_history 既有文案 + 新增 track_replay
+
+教训：跨批次符号级审查代替不了编译器；UI 资源类问题（缺失文案/id）应作为独立检查项，不依赖代码逻辑审查顺带覆盖。
+
+## 验证状态
+
+- CI run 37167402332（6cac652）成功：编译 + 全量单测通过，Release v1.2.0-44
+- 端到端（真机双端联调）待验证
+
 ## 下一步候选（未承诺）
 
 - 真机双端联调（100+ 点、弱网中断、受控端重启续传三场景）
