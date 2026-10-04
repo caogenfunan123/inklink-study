@@ -50,7 +50,12 @@ class TransportManager(
                 current is AblyRelayTransport &&
                 (current as? AblyRelayTransport)?.channelName == ablyChannel
         }
-        if (sameTarget) return
+        if (sameTarget) {
+            // 复用已有连接：同步刷新心跳间隔提供器（亮/灭屏切换后 provider 引用可能已变，
+            // 不刷新会一直沿用旧倍率，与灭屏拉长间隔的设计相悖）
+            current?.heartbeatIntervalProvider = heartbeatIntervalProvider
+            return
+        }
         current?.disconnect()
         current = null
         currentMode = null

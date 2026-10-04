@@ -174,8 +174,7 @@ class GpsManager(
         val quality = when {
             loc.accuracy <= 15f && currentSatelliteCount >= 6 -> "HIGH"
             loc.accuracy <= 50f -> "MEDIUM"
-            loc.accuracy > 50f -> "LOW"
-            else -> "NO_GPS"
+            else -> "LOW"
         }
 
         val report = GpsReport(

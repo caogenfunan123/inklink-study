@@ -22,4 +22,10 @@ interface IMessageTransport {
     fun sendAudio(frame: ByteArray)
 
     fun setListener(listener: TransportListener?)
+
+    /**
+     * 心跳间隔提供器，透传到底层实现，用于亮屏/灭屏自适应。
+     * 实时读取（每次排下一轮心跳时 invoke），引用变更即时生效。
+     */
+    var heartbeatIntervalProvider: (() -> Long)?
 }

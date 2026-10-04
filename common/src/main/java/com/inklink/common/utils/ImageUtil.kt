@@ -10,9 +10,10 @@ import java.io.ByteArrayOutputStream
 /**
  * 图片处理工具：降采样压缩与 Base64 编解码。
  *
- * 投屏图片走文本帧（payload 为 Base64 的降采样 JPEG）。发送端按目标尺寸精确缩放，
- * 并循环降质直到 Base64 长度落入 [MAX_BASE64_LENGTH] 内，保证 Ably 单条消息
- * 64KB 限制下也能稳定传输（局域网 WS 同步受益，更省流量）。
+ * 投屏图片走文本帧（payload 为 Base64 的降采样 JPEG）。发送端先按 [MAX_DIMENSION]
+ * 目标框降采样（inSampleSize 粗降 + 精确缩放），再循环降 JPEG 质量（70 → 30，步长 10），
+ * 仍超 [MAX_BASE64_LENGTH] 时逐级把宽度减半（下限 [MIN_DIMENSION]）重压；
+ * 缩到下限仍放不进时返回 null（由调用方提示用户），不会产出必然被 64KB 上限丢弃的脏数据。
  */
 object ImageUtil {
 
@@ -40,7 +41,7 @@ object ImageUtil {
         }.getOrNull()
     }
 
-    /** 循环降质直到 Base64 长度达标；最低质量仍超限时逐级缩小尺寸。 */
+    /** 循环降质直到 Base64 长度达标；最低质量仍超限时逐级缩小尺寸，缩到下限仍超限返回 null。 */
     private fun encodeWithinLimit(source: Bitmap): String? {
         var bitmap = source
         var quality = JPEG_QUALITY
@@ -52,9 +53,10 @@ object ImageUtil {
                 continue
             }
             val nextWidth = bitmap.width / 2
-            if (nextWidth < MIN_DIMENSION) return encoded
+            if (nextWidth < MIN_DIMENSION) return null
             val nextHeight = nextWidth * bitmap.height / bitmap.width
             val scaled = Bitmap.createScaledBitmap(bitmap, nextWidth, nextHeight, true)
+            if (scaled !== bitmap && bitmap !== source) bitmap.recycle()
             bitmap = scaled
             quality = JPEG_QUALITY
         }

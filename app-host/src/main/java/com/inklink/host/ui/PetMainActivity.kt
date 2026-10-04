@@ -1826,41 +1826,6 @@ class PetMainActivity : AppCompatActivity() {
         }
     }
 
-    /** 每日目标面板。 */
-    private fun showDailyGoalSheet() {
-        val p = petStateManager.dailyGoalProgress()
-        val (dialog, root) = buildSheet("📅 今日目标", "全部达成可领 ${PetCatalog.DAILY_REWARD_COIN} 金币")
-        root.addView(goalRow("🍙 投喂", p.feed, PetCatalog.DAILY_FEED_GOAL))
-        root.addView(goalRow("🎾 玩耍", p.play, PetCatalog.DAILY_PLAY_GOAL))
-        root.addView(goalRow("🫧 清洁", p.clean, PetCatalog.DAILY_CLEAN_GOAL))
-        if (p.claimed) {
-            root.addView(emptyHint("今日奖励已领取，明天再来～"))
-        } else if (petStateManager.canClaimDailyGoal()) {
-            val claimBtn = MaterialButton(this).apply {
-                text = "🎁 领取 ${PetCatalog.DAILY_REWARD_COIN} 金币"
-                isAllCaps = false
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(8, 20, 8, 0) }
-                setOnClickListener {
-                    val (ok, msg) = petStateManager.claimDailyReward()
-                    PixelToast.show(rootContainer, msg)
-                    localTtsManager.speak(msg)
-                    if (ok) {
-                        playStarParticles()
-                        floatText("+${PetCatalog.DAILY_REWARD_COIN} 🪙")
-                    }
-                    updatePetUi(petStateManager.getActivePet())
-                    dialog.dismiss()
-                }
-            }
-            root.addView(claimBtn)
-        } else {
-            root.addView(emptyHint("目标还未全部达成，继续加油！"))
-        }
-        dialog.show()
-    }
-
     private fun goalRow(label: String, done: Int, goal: Int): View {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL

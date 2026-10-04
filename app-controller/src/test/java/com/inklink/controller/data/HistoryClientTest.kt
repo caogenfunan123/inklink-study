@@ -196,4 +196,29 @@ class HistoryClientTest {
         assertEquals(0, store.totalPoints("dev-1"))
         assertTrue(state.historyProgress!!.failed)
     }
+
+    @Test
+    fun `受控端重生成更小分块集时越界块被忽略不误判完成`() {
+        client.start("dev-1", 1)
+        client.flushForTest()
+
+        client.onChunk("dev-1", chunk(0, 3, listOf(pointJson(base, 31.0))))
+        client.flushForTest()
+        assertFalse(state.historyProgress!!.done)
+
+        // 受控端缓存回收后重生成：total 收缩为 2，旧分块集的 seq=2 越界 → 忽略，不得计入 received
+        client.onChunk("dev-1", chunk(2, 2, listOf(pointJson(base + 9_000, 31.2))))
+        client.flushForTest()
+
+        // 新集合只收到 seq 0，不得提前判完成
+        assertFalse(state.historyProgress!!.done)
+        assertEquals(1, store.totalPoints("dev-1"))
+
+        // 无缝衔接：补齐新集合的 seq 1 才完成
+        client.onChunk("dev-1", chunk(1, 2, listOf(pointJson(base + 4_000, 31.05))))
+        client.flushForTest()
+
+        assertTrue(state.historyProgress!!.done)
+        assertEquals(2, store.totalPoints("dev-1"))
+    }
 }

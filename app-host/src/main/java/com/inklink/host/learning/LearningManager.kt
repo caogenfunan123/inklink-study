@@ -316,10 +316,16 @@ class LearningManager private constructor(context: Context) {
         )
     }
 
-    data class WrongItem(val module: String, val itemId: String, val wrongCount: Int, val lastTs: Long)
+    data class WrongItem(
+        val module: String,
+        val itemId: String,
+        val wrongCount: Int,
+        val lastTs: Long,
+        val level: Int
+    )
 
     fun wrongItems(limit: Int = 50): List<WrongItem> =
-        dao.wrongItems(limit).map { WrongItem(it.module, it.itemId, it.wrongCount, it.lastTs) }
+        dao.wrongItems(limit).map { WrongItem(it.module, it.itemId, it.wrongCount, it.lastTs, it.level) }
 
     // ---------- 护眼防沉迷 ----------
 

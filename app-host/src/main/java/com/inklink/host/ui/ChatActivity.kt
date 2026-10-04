@@ -129,7 +129,11 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun sendImage(uri: Uri) {
-        val base64 = ImageUtil.compressToBase64(this, uri) ?: return
+        val base64 = ImageUtil.compressToBase64(this, uri)
+        if (base64 == null) {
+            Toast.makeText(this, "图片过大，无法压缩后发送", Toast.LENGTH_SHORT).show()
+            return
+        }
         app.sendChatImage(base64)
     }
 

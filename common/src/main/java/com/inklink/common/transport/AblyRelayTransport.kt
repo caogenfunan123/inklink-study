@@ -64,7 +64,7 @@ class AblyRelayTransport(
     private val heartbeatEnabled = AtomicBoolean(false)
 
     /** 心跳间隔提供器，返回毫秒。为空时使用 [HEARTBEAT_INTERVAL_MS]。 */
-    var heartbeatIntervalProvider: (() -> Long)? = null
+    override var heartbeatIntervalProvider: (() -> Long)? = null
 
     override fun connect() {
         if (realtime != null) return

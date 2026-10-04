@@ -40,7 +40,7 @@ class LocalWsTransport(
     private val heartbeatEnabled = AtomicBoolean(false)
 
     /** 心跳间隔提供器，返回毫秒。为空时使用 [HEARTBEAT_INTERVAL_MS]。 */
-    var heartbeatIntervalProvider: (() -> Long)? = null
+    override var heartbeatIntervalProvider: (() -> Long)? = null
 
     private val reconnectExecutor = Executors.newSingleThreadScheduledExecutor { r ->
         Thread(r, "local-reconnect").apply { isDaemon = true }

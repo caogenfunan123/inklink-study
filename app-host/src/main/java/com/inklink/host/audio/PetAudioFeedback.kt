@@ -33,6 +33,7 @@ class PetAudioFeedback(private val context: Context) {
                 RawSoundPlayer.Result.UNKNOWN_ID -> "音效ID非法"
                 RawSoundPlayer.Result.FAILED_NO_ASSET -> "音效资产缺失"
                 RawSoundPlayer.Result.FAILED_PLAY -> "音效播放失败"
+                RawSoundPlayer.Result.INTERRUPTED -> "音效被新指令打断"
             }
             if (!spoke) parts += "播报未播:${ttsNote ?: "未启用"}"
             if (mediaMuted) parts += "媒体音量为0"
@@ -71,6 +72,18 @@ class PetAudioFeedback(private val context: Context) {
         ttsText: String?,
         onDone: (Report) -> Unit
     ) {
+        if (soundRes == RawSoundPlayer.Result.INTERRUPTED) {
+            // 被新指令打断：旧文本不再朗读（会与新音效/新朗读叠音），但回调必须兑现以发出 ACK
+            onDone(
+                Report(
+                    sound = RawSoundPlayer.Result.INTERRUPTED,
+                    spoke = false,
+                    ttsNote = "被新指令打断，跳过朗读",
+                    mediaMuted = player.isMediaVolumeMuted()
+                )
+            )
+            return
+        }
         if (!wantSpeak) {
             onDone(
                 Report(

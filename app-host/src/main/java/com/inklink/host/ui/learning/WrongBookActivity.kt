@@ -50,7 +50,7 @@ class WrongBookActivity : AppCompatActivity() {
                 }
                 startActivity(
                     Intent(this, target)
-                        .putExtra(LessonRouter.EXTRA_LEVEL, 2)
+                        .putExtra(LessonRouter.EXTRA_LEVEL, item.level)
                         .putExtra(LessonRouter.EXTRA_REVIEW, true)
                 )
             }

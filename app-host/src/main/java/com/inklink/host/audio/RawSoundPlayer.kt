@@ -31,7 +31,7 @@ class RawSoundPlayer(private val context: Context) {
     enum class Route { MUSIC, ALARM }
 
     /** 播放结果：区分"不该响"和"响了但失败"，降级路径与真机排查看 ACK 就能定责。 */
-    enum class Result { PLAYED, SKIPPED_BY_ALARM, UNKNOWN_ID, FAILED_NO_ASSET, FAILED_PLAY }
+    enum class Result { PLAYED, SKIPPED_BY_ALARM, UNKNOWN_ID, FAILED_NO_ASSET, FAILED_PLAY, INTERRUPTED }
 
     private var active: MediaPlayer? = null
     private var activeRoute: Route? = null
@@ -67,7 +67,8 @@ class RawSoundPlayer(private val context: Context) {
     fun hasAsset(soundId: String): Boolean = rawResOf(soundId) != null
 
     /**
-     * 播放预制音效。[onDone] 在完成/出错时被调用一次（用于串接后续 TTS 朗读，避免音话重叠）。
+     * 播放预制音效。[onDone] 在完成/出错/被后续音效打断时被调用一次（用于串接后续 TTS 朗读，
+     * 避免音话重叠）。打断时结果为 [Result.INTERRUPTED]，由调用方决定是否继续串联。
      * 任何失败都不抛异常——音频坏了绝不能阻断宠物状态结算（文档 §八 铁律 3）。
      */
     fun play(soundId: String, onDone: (Result) -> Unit = {}) {
@@ -86,7 +87,10 @@ class RawSoundPlayer(private val context: Context) {
             finish(onDone, Result.SKIPPED_BY_ALARM)
             return
         }
+        // 被新音效打断：先兑现旧回调再 release，否则"音效后接 TTS"的串联会永久悬挂
+        val interrupted = activeDone
         releaseActive()
+        interrupted?.invoke(Result.INTERRUPTED)
 
         val mp = MediaPlayer()
         try {

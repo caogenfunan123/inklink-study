@@ -18,8 +18,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.inklink.common.protocol.InkMessage
 import com.inklink.common.protocol.MessageType
 import com.inklink.common.protocol.payload.AckPayload
-import com.inklink.common.service.discovery.DiscoveredDevice
-import com.inklink.common.service.discovery.UdpDiscovery
 import com.inklink.common.transport.LocalWsTransport
 import com.inklink.common.transport.TransportMode
 import com.inklink.common.utils.ImageUtil
@@ -286,12 +284,15 @@ class ControllerActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_IMAGE && resultCode == Activity.RESULT_OK) {
             val uri = data?.data ?: return
-            ImageUtil.compressToBase64(this, uri)?.let { base64 ->
-                app.transportManager.sendMessage(
-                    InkMessage.text(MessageType.IMAGE, base64, from = app.deviceId, target = state.selectedDeviceId)
-                )
-                Toast.makeText(this, "投屏图片已发送", Toast.LENGTH_SHORT).show()
+            val base64 = ImageUtil.compressToBase64(this, uri)
+            if (base64 == null) {
+                Toast.makeText(this, "图片过大，无法压缩后发送", Toast.LENGTH_SHORT).show()
+                return
             }
+            app.transportManager.sendMessage(
+                InkMessage.text(MessageType.IMAGE, base64, from = app.deviceId, target = state.selectedDeviceId)
+            )
+            Toast.makeText(this, "投屏图片已发送", Toast.LENGTH_SHORT).show()
         }
     }
 
