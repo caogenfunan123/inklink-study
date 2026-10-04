@@ -88,3 +88,5 @@
 4. **双时钟 settle 顺序**：翻转 `PetClock.foreground` 前后各 settle 一次，顺序反了整段按错倍率结算。
 5. **配对密钥两端一致**：host 设置 → 配对密钥设置；controller 设置 → 配对密钥设置。改任一端的 key 必须同步另一端，否则 ABLY 频道名不匹配、直接失联。
 6. **弹窗/对话框异步出口**：一律 `isDestroyed/isFinishing` 双检后再 show。
+7. **MediaPlayer 必须创建在有 Looper 的线程**（通常是主线程）：其构造函数内部 `new Handler()` 取当前线程 Looper，工作线程上直接抛 "Can't create handler inside thread that has not called Looper.prepare()"；需要 IO 时"后台落盘 → 主线程创建"，参考 `VoicePlayer`/`RawSoundPlayer`。
+8. **接口上提取公共能力属性**：`heartbeatIntervalProvider` 原在三传输类各写一份，`TransportManager.sameTarget` 早退时就漏刷新——上提 `IMessageTransport` 接口后单点刷新，同类"早退不同步"坑一次根除。
