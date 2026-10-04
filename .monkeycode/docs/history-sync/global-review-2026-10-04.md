@@ -25,7 +25,7 @@
 | C4 | UdpDiscovery responder 绑定失败后 `running` 残 true，发现功能静默死亡 | `UdpDiscovery.kt` | 失败复位 `running=false` + `Log.w`，finally 置 bound |
 | C5 | GeoFenceManagerTest 两个多围栏用例与 2-sample 去抖实现矛盾，自 f4977c8 起常红——因 common 测试从未进 CI 而隐形 | `GeoFenceManagerTest.kt` | 按实际语义重写 |
 | C6 | `distanceMeters` 用 `atan2(sqrt(a),sqrt(1-a))`，对径点因浮点负值出 NaN；且三处 Haversine 重复拷贝 | `GeoFenceManager.kt` | `2*asin(sqrt(a.coerceIn(0,1)))`，ReportThrottler/GpsTreasureHunter 统一委托 |
-| C7 | CI 门禁只跑 app-host/app-controller 测试，common 模块测试从不执行 | `.github/workflows/android.yml` | 补 `:common:testDebugUnitTest` + 报告上传 |
+| C7 | CI 门禁只跑 app-host/app-controller 测试，common 模块测试从不执行 | `.github/workflows/android.yml` | 补 `:common:testDebugUnitTest` + 报告上传。**补上门禁后立即抓出两个问题**（93ac503 修复）：ControllerActivity `when` 缺 else 编译失败；GeoFenceManagerTest 第 103 行断言漏了同采样触发的 `Exit(b)` |
 | C8 | ChatStore `++seq` 非原子，网络线程+UI 双写发重复消息 id | `ChatStore.kt` | `AtomicLong` |
 
 ### app-host
@@ -55,6 +55,7 @@
 
 ## 3. 复审中确认不成立/已有防护的项（防止重复排查）
 
+- tools/ 五条资产管线为纯 Python 离线脚本（3073 行），不进 App 运行时，本轮巡检无代码级风险点；构建配置（gradle/libs.versions.toml/settings）无问题。
 - FenceEditActivity 已有空围栏/无目标校验（非无校验）。
 - PetDetailActivity 监听链已做 save/restore（非泄漏）。
 - InkMessage.msgId 工厂与主构造默认值都会生成（非可空）。
