@@ -1,6 +1,6 @@
 package com.inklink.common.service.geofence
 
-import kotlin.math.atan2
+import kotlin.math.asin
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -91,10 +91,11 @@ class GeoFenceManager(
         fun distanceMeters(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
             val dLat = Math.toRadians(lat2 - lat1)
             val dLng = Math.toRadians(lng2 - lng1)
-            val a = sin(dLat / 2) * sin(dLat / 2) +
+            val a = (sin(dLat / 2) * sin(dLat / 2) +
                 cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) *
-                sin(dLng / 2) * sin(dLng / 2)
-            val c = 2 * atan2(sqrt(a), sqrt(1 - a))
+                sin(dLng / 2) * sin(dLng / 2)).coerceIn(0.0, 1.0)
+            // 对径点等浮点越界场景 a 可能微大于 1，钳制后 asin 不会产出 NaN
+            val c = 2 * asin(sqrt(a))
             return EARTH_RADIUS_METERS * c
         }
     }

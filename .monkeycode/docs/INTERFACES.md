@@ -139,7 +139,7 @@ AMR_NB 12.2kbps @8kHz，按住录音松开返回字节 → Base64 进 14 号文�
 |----|------------------|----------------------|--------------------|
 | 角色 | host=SERVER 监听 8080；controller=CLIENT 连 `ws://ip:port` | 双端均 CLIENT，连自建中转（服务端已删，client 保留） | 双端均 Ably 订阅者 |
 | 主频道 | — | — | `inklink-proto-ch01`，事件名 `ink-message` |
-| 好友频道 | — | — | `inklink-pet-${pairingKey}`（pairingKey 默认 `inklink_default_key`，存 prefs），白名单码位 {33,34,43} |
+| 好友频道 | — | — | `inklink-pet-${pairingKey}`（pairingKey 默认 `inklink_default_key`，存 prefs；两端设置页「配对密钥设置」可改，须一致），白名单码位 {33,34,43} |
 | 心跳 | 默认 15s，HeartbeatPolicy 覆盖（亮屏 10s/灭屏 30s） | 15s | 15s |
 | 重连退避 | 1s shl attempt（上限 5），封顶 30s | 1s shl attempt（上限 10）+ 0-50% jitter，封顶 60s | Ably SDK 自带 |
 | 定向 | targetDeviceId 单播 | 服务器按 target/from 路由 | echoMessages=false；target 非空且≠本机则丢弃；msgId 进 Ably 服务端幂等去重 |

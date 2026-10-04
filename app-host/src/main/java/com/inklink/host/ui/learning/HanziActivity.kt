@@ -122,9 +122,15 @@ class HanziActivity : AppCompatActivity() {
                 } else {
                     wrongChars.add(entry.char)
                     btn.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_wrong)
-                    btn.isEnabled = false
                     sfx.play(SoundEffectManager.Sfx.GROAN)
-                    PetTtsGate.get(applicationContext).speak("再看一看,这是${entry.char}")
+                    // 高亮正解后前进，避免 answered 拦截后续点击导致课程卡死
+                    optionButtons.forEachIndexed { j, b ->
+                        if (opts.getOrNull(j) == entry.char) {
+                            b.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_correct)
+                        }
+                    }
+                    idx++
+                    handler.postDelayed({ render() }, 1200)
                 }
             }
         }

@@ -147,6 +147,13 @@ class HostActivity : AppCompatActivity() {
         }
 
         btnDismissRing.setOnClickListener {
+            // 必须同时通知前台服务停掉铃声；只清 UI 标志会留下关不掉的 SirenManager
+            runCatching {
+                startService(
+                    Intent(this, InkForegroundService::class.java)
+                        .setAction(InkForegroundService.ACTION_STOP_RING)
+                )
+            }
             hostState.setRinging(false)
         }
 
@@ -343,7 +350,11 @@ class HostActivity : AppCompatActivity() {
         val modes = arrayOf(
             getString(R.string.mode_local),
             getString(R.string.mode_relay),
-            getString(R.string.mode_ably)
+            getString(R.string.mode_ably),
+            getString(
+                if (app.pairingKeyIsDefault) R.string.pairing_settings_warning
+                else R.string.pairing_settings
+            )
         )
         AlertDialog.Builder(this)
             .setTitle(R.string.transport_settings)
@@ -358,7 +369,38 @@ class HostActivity : AppCompatActivity() {
                     }
                     1 -> showRelayDialog(app)
                     2 -> showAblyKeyDialog(app)
+                    3 -> showPairingKeyDialog(app)
                 }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** 配对密钥：派生 Ably 频道名与远程重置 PIN 的 HMAC 密钥；两端须设为一致。 */
+    private fun showPairingKeyDialog(app: InkHostApplication) {
+        val input = EditText(this).apply {
+            hint = "配对密钥（主控端须填写相同值）"
+            setText(app.pairingKey)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("配对密钥设置")
+            .setMessage(
+                if (app.pairingKeyIsDefault)
+                    "⚠️ 当前为公开源码默认密钥，任何人可猜出频道名并伪造远程重置 PIN 指令。请改为私有值，并让主控端填写相同密钥。"
+                else null
+            )
+            .setView(input)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                app.pairingKey = input.text.toString()
+                if (app.transportMode == InkHostApplication.MODE_ABLY) {
+                    app.transportManager.switchMode(
+                        TransportMode.ABLY,
+                        ablyKey = app.ablyKey,
+                        ablyChannel = "${com.inklink.common.transport.AblyRelayTransport.CHANNEL_PREFIX}${app.pairingKey}"
+                    )
+                }
+                render()
+                Toast.makeText(this, "配对密钥已保存", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()

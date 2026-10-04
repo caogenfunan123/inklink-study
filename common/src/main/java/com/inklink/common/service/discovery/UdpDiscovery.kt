@@ -38,7 +38,7 @@ object UdpDiscovery {
     private var socket: DatagramSocket? = null
     private var thread: Thread? = null
 
-    /** 受控端启动应答线程。 */
+    /** 受控端启动应答线程。绑定失败（端口占用等）时复位状态，允许后续重试。 */
     fun startResponder(deviceId: String, wsPort: Int) {
         if (running.get()) return
         running.set(true)
@@ -87,9 +87,11 @@ object UdpDiscovery {
     }
 
     private fun responderLoop(deviceId: String, wsPort: Int) {
-        runCatching {
+        var bound = false
+        try {
             val sock = DatagramSocket(DISCOVERY_PORT)
             socket = sock
+            bound = true
             val buf = ByteArray(256)
             while (running.get()) {
                 val packet = DatagramPacket(buf, buf.size)
@@ -101,6 +103,13 @@ object UdpDiscovery {
                     sock.send(DatagramPacket(bytes, bytes.size, packet.address, packet.port))
                 }
             }
+        } catch (e: Exception) {
+            // 绑定失败（端口被占用）或运行中异常：必须复位 running，
+            // 否则 startResponder 的守卫会永久短路，局域网发现静默失效且无任何日志
+            android.util.Log.w("UdpDiscovery", "responder 退出: ${e.javaClass.simpleName}: ${e.message}")
+        } finally {
+            socket = null
+            if (!bound) running.set(false)
         }
     }
 

@@ -94,6 +94,12 @@ class ControllerActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 从设备管理/地图等子页返回时，选中设备与连接态可能已变，重刷一次
+        render()
+    }
+
     private fun bindViews() {
         tvStatus = findViewById(R.id.tv_status)
         cardsContainer = findViewById(R.id.cards_container)
@@ -119,7 +125,12 @@ class ControllerActivity : AppCompatActivity() {
     }
 
     private fun requestPermissions() {
-        val perms = mutableListOf(PermissionUtil.RECORD_AUDIO, PermissionUtil.CAMERA)
+        val perms = mutableListOf(
+            PermissionUtil.RECORD_AUDIO,
+            PermissionUtil.CAMERA,
+            // 定位：地图页自身绿色标记与驾车路线必需（此前从未申请，功能静默失效）
+            *PermissionUtil.LOCATION_PERMS
+        )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(android.Manifest.permission.POST_NOTIFICATIONS)
         }
@@ -152,7 +163,11 @@ class ControllerActivity : AppCompatActivity() {
         val items = arrayOf(
             getString(R.string.mode_local),
             getString(R.string.mode_relay),
-            getString(R.string.mode_ably)
+            getString(R.string.mode_ably),
+            getString(
+                if (app.pairingKeyIsDefault) R.string.pairing_settings_warning
+                else R.string.pairing_settings
+            )
         )
         var selected = when (app.transportManager.currentMode()) {
             TransportMode.RELAY -> 1
@@ -169,7 +184,32 @@ class ControllerActivity : AppCompatActivity() {
                     }
                     1 -> showRelayConfig()
                     2 -> showAblyConfig()
+                    3 -> showPairingConfig()
                 }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** 配对密钥：与受控端一致才收得到消息；同时是受控端远程重置 PIN 的 HMAC 密钥。 */
+    private fun showPairingConfig() {
+        val keyEdit = EditText(this).apply {
+            hint = "配对密钥（与受控端一致）"
+            setText(app.pairingKey)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("配对密钥设置")
+            .setMessage(
+                if (app.pairingKeyIsDefault)
+                    "⚠️ 当前为公开源码默认密钥，请与受控端协商改为一致的私有值。"
+                else null
+            )
+            .setView(keyEdit)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                app.pairingKey = keyEdit.text.toString()
+                app.connectAbly()
+                render()
+                Toast.makeText(this, "配对密钥已保存，正在重连频道", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -257,7 +297,12 @@ class ControllerActivity : AppCompatActivity() {
 
     private fun render() {
         val connected = state.connected
-        val statusText = if (connected) "已连接 (Ably 4G 在线)" else "未连接"
+        val modeLabel = when (app.transportManager.currentMode()) {
+            TransportMode.LOCAL -> "局域网直连"
+            TransportMode.RELAY -> "服务器中转"
+            TransportMode.ABLY -> "Ably 4G 中转"
+        }
+        val statusText = if (connected) "已连接 ($modeLabel)" else "未连接"
         val targetNickname = state.selectedDeviceId?.let { id ->
             app.devices().firstOrNull { it.deviceId == id }?.nickname?.takeIf { it.isNotBlank() } ?: id.take(8)
         }

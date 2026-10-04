@@ -62,6 +62,8 @@
     <string name="mode_local">局域网直连</string>
     <string name="mode_relay">公网服务器中转</string>
     <string name="mode_ably">Ably 中转（4G-4G 原型）</string>
+    <string name="pairing_settings">配对密钥设置</string>
+    <string name="pairing_settings_warning">配对密钥设置（当前为默认密钥，建议修改）</string>
     <string name="ably_config">Ably 中转配置</string>
     <string name="ably_target_hint">受控端设备 ID</string>
     <string name="ably_connect_hint">将连接 Ably 中转频道。连接后请在「设备管理」中选择目标受控端。</string>

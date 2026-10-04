@@ -96,7 +96,9 @@ class AudioManager {
         while (running.get()) {
             val read = record?.read(buffer, 0, buffer.size) ?: -1
             if (read <= 0) continue
-            val frame = if (read < buffer.size) buffer.copyOf(read) else buffer
+            // 必须拷贝：不拷贝时 frame 与 buffer 同一实例，主循环下一轮即覆盖，
+            // 而消费方（传输发送线程）可能仍在读上一帧 → 语音数据损坏
+            val frame = buffer.copyOf(read)
             if (isSilence(frame)) continue
             onFrame?.invoke(AudioPacket(sequence = seq.getAndIncrement() and AudioPacket.MAX_SEQUENCE, pcm = frame))
         }

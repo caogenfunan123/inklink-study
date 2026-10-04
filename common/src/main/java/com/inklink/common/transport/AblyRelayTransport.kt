@@ -109,6 +109,9 @@ class AblyRelayTransport(
         extraChannels.clear()
         runCatching { realtime?.close() }
         realtime = null
+        // 停掉心跳线程，避免 TransportManager 切换模式后旧实例线程常驻
+        heartbeatExecutor.shutdownNow()
+        listener?.onConnectionChanged(false)
     }
 
     override fun isConnected(): Boolean =

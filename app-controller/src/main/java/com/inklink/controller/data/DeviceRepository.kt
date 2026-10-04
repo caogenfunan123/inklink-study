@@ -10,12 +10,16 @@ import com.inklink.common.service.geofence.GeofenceConfig
  *
  * 主控端可绑定多台受控端，列表按 [DeviceEntity.deviceId] 去重；
  * 增删改均立即落盘，重启后保持。
+ *
+ * 全部读写方法以实例锁串行化：list()+save() 是"读-改-写"复合操作，
+ * 网络回调线程与 UI 线程并发触发时（如 UDP 发现 + 用户手动添加）会互相覆盖丢失更新。
  */
 class DeviceRepository(context: Context) {
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     private val gson = Gson()
 
+    @Synchronized
     fun list(): List<DeviceEntity> {
         val json = prefs.getString(KEY_DEVICES, null) ?: return emptyList()
         return runCatching {
@@ -23,10 +27,12 @@ class DeviceRepository(context: Context) {
         }.getOrNull() ?: emptyList()
     }
 
+    @Synchronized
     fun findByDeviceId(deviceId: String): DeviceEntity? =
         list().firstOrNull { it.deviceId == deviceId }
 
     /** 添加设备；已存在相同 deviceId 时更新昵称。 */
+    @Synchronized
     fun add(device: DeviceEntity) {
         val devices = list().toMutableList()
         val existing = devices.indexOfFirst { it.deviceId == device.deviceId }
@@ -38,15 +44,18 @@ class DeviceRepository(context: Context) {
         save(devices)
     }
 
+    @Synchronized
     fun remove(deviceId: String) {
         save(list().filterNot { it.deviceId == deviceId })
     }
 
+    @Synchronized
     fun updateNickname(deviceId: String, nickname: String) {
         save(list().map { if (it.deviceId == deviceId) it.copy(nickname = nickname) else it })
     }
 
     /** 记录设备最后一次下发的围栏（WGS-84），供主控端地图画圈可视化。 */
+    @Synchronized
     fun updateFence(deviceId: String, lat: Double, lng: Double, radiusMeters: Double) {
         save(list().map {
             if (it.deviceId == deviceId) {
@@ -58,6 +67,7 @@ class DeviceRepository(context: Context) {
     }
 
     /** 记录设备最后一次下发的多围栏列表（WGS-84），第 0 个为主围栏。 */
+    @Synchronized
     fun updateFences(deviceId: String, fences: List<GeofenceConfig.FenceEntry>) {
         require(fences.isNotEmpty()) { "围栏列表不能为空" }
         save(list().map {

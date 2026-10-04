@@ -50,7 +50,8 @@ object PetDecayEngine {
         }
         val speed = if (foreground) 1.0 else 1.0 / PetClock.IDLE_FACTOR
         val budget = realSec * speed
-        val floorVal = if (foreground) 0 else PetClock.FLOOR
+        // 地板 30 方案已随 2026-08-31 "不玩默认休眠"修订废弃：可达路径 floorVal 恒为 0
+        // （!asleep 必 foreground，后台一律按 asleep 结算），故各属性一律以 0 为地板
         // 后台自动休眠（2026-08-31）：非前台一律按睡眠语义结算，四维不掉、精力/健康恢复
         val asleep = pet.isSleeping || !foreground
         // 暂停判定 = 截止时间还在未来（clearExpiredPause 负责把已过期时间戳归零）
@@ -65,24 +66,22 @@ object PetDecayEngine {
         }
 
         // ---- 饥饿（休眠豁免） ----
-        if (!asleep && pet.hunger > floorVal) {
+        if (!asleep && pet.hunger > 0) {
             val (pts, rem) = dispense(pet.remHunger, RATE_HUNGER)
             pet.remHunger = rem
             if (pts > 0) {
-                pet.hunger = maxOf(pet.hunger - pts, floorVal).coerceIn(0, 100)
-                if (pet.hunger == floorVal && floorVal > 0) pet.remHunger = 0.0
+                pet.hunger = (pet.hunger - pts).coerceIn(0, 100)
             }
         } else pet.remHunger = 0.0
 
         // ---- 开心（buff_mood 暂停期豁免；休眠整体豁免） ----
-        if (!asleep && !moodPaused && pet.happiness > floorVal) {
+        if (!asleep && !moodPaused && pet.happiness > 0) {
             val (pts, rem) = dispense(pet.remMood, RATE_MOOD)
             pet.remMood = rem
             if (pts > 0) {
-                pet.happiness = maxOf(pet.happiness - pts, floorVal).coerceIn(0, 100)
-                if (pet.happiness == floorVal && floorVal > 0) pet.remMood = 0.0
+                pet.happiness = (pet.happiness - pts).coerceIn(0, 100)
             }
-        } else if (!asleep && !moodPaused && pet.happiness <= floorVal) {
+        } else if (!asleep && !moodPaused) {
             pet.remMood = 0.0
         }
 
@@ -94,24 +93,22 @@ object PetDecayEngine {
                 pet.energy = (pet.energy + pts).coerceIn(0, 100)
                 if (pet.energy >= 100) pet.remEnergy = 0.0
             }
-        } else if (!energyPaused && pet.energy > floorVal) {
+        } else if (!energyPaused && pet.energy > 0) {
             val (pts, rem) = dispense(pet.remEnergy, RATE_ENERGY)
             pet.remEnergy = rem
             if (pts > 0) {
-                pet.energy = maxOf(pet.energy - pts, floorVal).coerceIn(0, 100)
-                if (pet.energy == floorVal && floorVal > 0) pet.remEnergy = 0.0
+                pet.energy = (pet.energy - pts).coerceIn(0, 100)
             }
         } else {
             pet.remEnergy = 0.0
         }
 
         // ---- 清洁（休眠豁免） ----
-        if (!asleep && pet.clean > floorVal) {
+        if (!asleep && pet.clean > 0) {
             val (pts, rem) = dispense(pet.remClean, RATE_CLEAN)
             pet.remClean = rem
             if (pts > 0) {
-                pet.clean = maxOf(pet.clean - pts, floorVal).coerceIn(0, 100)
-                if (pet.clean == floorVal && floorVal > 0) pet.remClean = 0.0
+                pet.clean = (pet.clean - pts).coerceIn(0, 100)
             }
         } else pet.remClean = 0.0
 

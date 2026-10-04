@@ -73,6 +73,9 @@ class LocalWsTransport(
         client?.let { runCatching { it.closeBlocking() } }
         client = null
         synchronized(connections) { connections.clear() }
+        // 停掉心跳/重连线程：TransportManager 切换模式会新建实例，旧实例的线程不回收会累积泄漏
+        heartbeatExecutor.shutdownNow()
+        reconnectExecutor.shutdownNow()
         notifyConnectionChanged()
     }
 

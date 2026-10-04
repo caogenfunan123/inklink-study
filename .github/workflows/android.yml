@@ -29,12 +29,14 @@ jobs:
     - name: Unit tests (JVM 契约与回归门禁)
       # 必须跑：此前三条衰减/玩法单测长期失效，正是因为 CI 只做 assembleRelease、
       # 从不执行单测（编译期不检查断言，失效无法被发现）。素材契约（附录A）同样依赖这里。
-      # app-controller 单测（ControllerState/DeviceRepository/TrackStore）同为回归门禁。
+      # app-controller 单测（ControllerState/DeviceRepository/TrackStore/HistoryClient）同为回归门禁。
+      # common 单测（协议往返/围栏/传输/音频帧/工具）也必须进门禁——
+      # 2026-10 复盘发现 GeoFenceManagerTest 两个多围栏用例与实现语义相反却因不进 CI 而隐形。
       env:
         ORG_GRADLE_PROJECT_ABLY_KEY: ${{ secrets.ABLY_KEY }}
         ORG_GRADLE_PROJECT_TENCENT_MAP_KEY: ${{ secrets.TENCENT_MAP_KEY }}
         ORG_GRADLE_PROJECT_TENCENT_MAP_SK: ${{ secrets.TENCENT_MAP_SK }}
-      run: ./gradlew :app-host:testDebugUnitTest :app-controller:testDebugUnitTest --stacktrace
+      run: ./gradlew :common:testDebugUnitTest :app-host:testDebugUnitTest :app-controller:testDebugUnitTest --stacktrace
 
     - name: Upload test reports on failure
       if: failure()
@@ -42,6 +44,7 @@ jobs:
       with:
         name: unit-test-reports
         path: |
+          common/build/reports/tests/
           app-host/build/reports/tests/
           app-controller/build/reports/tests/
         if-no-files-found: ignore
@@ -70,7 +73,7 @@ jobs:
         name: "InkLink Release v1.2.0-${{ github.run_number }}"
         body: |
           InkLink 游戏化养成 V1.1 全量落地
-          - 双时钟秒级数值引擎（前台全速/后台÷20+地板30，分属性余量）
+          - 双时钟秒级数值引擎（前台全速/后台自动休眠：四维豁免+精力健康缓慢恢复，分属性余量）
           - Room 持久化（背包单行 JSON + 事件日志环形 500）+ 10s 节流写盘
           - 10 物种共骨架部件化像素渲染（程序化补间、像素房间场景、分段进度条、像素气泡）
           - AI 行为树（状态抱怨 + 性格加权自主行为 + 情绪台词气泡）

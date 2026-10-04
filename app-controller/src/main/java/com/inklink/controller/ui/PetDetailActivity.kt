@@ -29,6 +29,16 @@ class PetDetailActivity : AppCompatActivity() {
     private lateinit var tvStats: TextView
     private var tvTtsHint: android.widget.TextView? = null
 
+    /**
+     * 异步消息到达后切回 UI 线程的安全封装：页面已销毁时不执行，
+     * 否则 AlertDialog 会抛 BadTokenException 崩溃（曾复现：收到 CMD_PET_EVENT 后关页）。
+     */
+    private fun safeUi(block: () -> Unit) {
+        runOnUiThread {
+            if (!isDestroyed && !isFinishing) block()
+        }
+    }
+
     private val transportListener = object : com.inklink.common.transport.TransportListener {
         override fun onTextMessage(message: InkMessage) {
             if (message.fromDeviceId != targetDeviceId) return
@@ -39,7 +49,7 @@ class PetDetailActivity : AppCompatActivity() {
                         gson.fromJson(message.payload, com.inklink.common.protocol.payload.PetEventPayload::class.java)
                     }.getOrNull()
                     when (ev?.eventId) {
-                        "event_hungry_alert" -> runOnUiThread { showHungerAlert(ev.ttsText) }
+                        "event_hungry_alert" -> safeUi { showHungerAlert(ev.ttsText) }
                         else -> Unit   // 其它 eventId 是主控端自己发出的回声，忽略
                     }
                 }
@@ -83,7 +93,7 @@ class PetDetailActivity : AppCompatActivity() {
                         gson.fromJson(message.payload, com.inklink.common.protocol.payload.RemoteTaskAckPayload::class.java)
                     }.getOrNull()
                     if (ack != null && ack.status == "PLAYED") {
-                        runOnUiThread { showTaskRewardDialog(ack.taskId) }
+                        safeUi { showTaskRewardDialog(ack.taskId) }
                     }
                 }
                 MessageType.PET_BAG_INTERACT -> {
@@ -91,7 +101,7 @@ class PetDetailActivity : AppCompatActivity() {
                     val ip = runCatching {
                         gson.fromJson(message.payload, PetBagInteractPayload::class.java)
                     }.getOrNull()
-                    runOnUiThread {
+                    safeUi {
                         if (ip?.subType == "CALL_VISIT") {
                             AlertDialog.Builder(this@PetDetailActivity)
                                 .setTitle("💌 ${ip.visitorName.ifBlank { "孩子的宠物" }} 想见你")
@@ -147,7 +157,7 @@ class PetDetailActivity : AppCompatActivity() {
                         gson.fromJson(message.payload, com.inklink.common.protocol.payload.PetGameActionPayload::class.java)
                     }.getOrNull()
                     if (action != null) {
-                        runOnUiThread { settleGameResult(action.inviteId, action.actionData) }
+                        safeUi { settleGameResult(action.inviteId, action.actionData) }
                     }
                 }
                 else -> Unit

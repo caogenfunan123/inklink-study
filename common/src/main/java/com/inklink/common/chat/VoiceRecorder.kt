@@ -41,7 +41,8 @@ class VoiceRecorder(private val context: Context) {
             recorder = null
             file?.takeIf { it.exists() && it.length() > 0 }?.readBytes()
         }.getOrNull()
-        recorder = null
+        // 临时 AMR 读完即删，避免 cacheDir 长期堆积
+        file?.delete()
         file = null
         return data
     }
@@ -52,6 +53,7 @@ class VoiceRecorder(private val context: Context) {
         runCatching { recorder?.stop() }
         runCatching { recorder?.release() }
         recorder = null
+        file?.delete()
         file = null
     }
 }

@@ -28,6 +28,8 @@
     <string name="mode_local">局域网直连</string>
     <string name="mode_relay">公网服务器中转</string>
     <string name="mode_ably">Ably 中转（4G-4G 原型）</string>
+    <string name="pairing_settings">配对密钥设置</string>
+    <string name="pairing_settings_warning">配对密钥设置（当前为默认密钥，建议修改）</string>
     <string name="ably_id_display">Ably 中转\n设备 ID: %1$s</string>
     <string name="relay_url_required">请输入服务器地址</string>
     <string name="chat_title">聊天</string>

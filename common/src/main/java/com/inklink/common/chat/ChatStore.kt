@@ -2,6 +2,7 @@ package com.inklink.common.chat
 
 import com.inklink.common.protocol.ChatMessage
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * 聊天消息存储（进程级，双端各自维护一份，Activity 切换不丢）。
@@ -16,9 +17,10 @@ class ChatStore {
 
     private val messages = CopyOnWriteArrayList<ChatMessage>()
     private val listeners = CopyOnWriteArrayList<Listener>()
-    private var seq = 0L
+    // 网络回调线程与 UI 线程都会 add()：非原子 ++ 会发出重复 id
+    private val seq = AtomicLong(0L)
 
-    fun nextId(): Long = ++seq
+    fun nextId(): Long = seq.incrementAndGet()
 
     fun add(message: ChatMessage) {
         messages.add(message)

@@ -186,8 +186,14 @@ python tools/learning/build_learning_assets.py
 | build_learning_assets.py 副作用 | 重跑会生成已退役的 lib/ 目录，需手动剔除 |
 | SoundEffectManager 遗留缺陷 | CHECKLIST_PET_AUDIO 阶段1末条，待修 |
 | 真机项未验证 | CHECKLIST_PET_AUDIO 阶段8（STREAM_ALARM 实测/弱网/内存巡检等 8 条）、CHECKLIST_PET_SPRITE 阶段6 |
-| app-controller 测试不在 CI | CHECKLIST_PET_AUDIO 阶段10「故意不做」项，如补 CI 记得同步 |
+| app-controller 测试不在 CI | 已不成立：CI 现跑 common/host/controller 三模块单测 |
 | sheep 街机素材缺失 | PetArcadeMap 三级回退兜底，勿删回退逻辑 |
 | Ably ConnectionState 包名 | 用 `io.ably.lib.realtime.ConnectionState`（非 types 包） |
+| 答题三件套易漏 | 2026-10 复盘：识字/拼音两岛错答分支曾锁死课程。新答题页先抄 MathActivity（锁输入+高亮正解+推进索引） |
+| CI 必须含 :common | 2026-10 复盘：GeoFenceManagerTest 多围栏用例因 common 测试不进 CI 而长期隐形失效，已补门禁 |
+| 墙钟禁令 | 冷却/限流/去重窗口一律 MonoClock（SystemClock.elapsedRealtime），墙钟回摆功能静默失效 |
+| 双时钟 settle 顺序 | 翻转 PetClock.foreground 前必须先按当前倍率 settle；onResume 顺序反过（曾整段后台按前台结算） |
+| 配对密钥两端一致 | 默认 inklink_default_key 可预测；两端在各自设置页改，改一端必须同步另一端，否则 ABLY 频道失联 |
+| 异步弹窗守卫 | runOnUiThread 后弹 AlertDialog 前必须 isDestroyed/isFinishing 双检，否则关页崩溃（BadTokenException） |
 | 学习模块无单测 | LearningManager/艾宾浩斯/护眼规则仅靠代码注释约束，改前仔细读 LearningManager 内注释 |
 | 金币经济参数 | 日上限 150 / 刷关递减 24h 内第 3 次减半第 5 次为 0 等口径见 docs/IMPLEMENTATION_PLAN.md 第 6 节，改数值需对齐该文档 |

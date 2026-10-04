@@ -47,6 +47,7 @@ import com.inklink.common.utils.PermissionUtil
 import com.inklink.common.utils.ReportThrottler
 import com.inklink.host.InkHostApplication
 import com.inklink.host.R
+import com.inklink.host.receiver.PetWakeupReceiver
 import com.inklink.host.state.HostAlert
 import com.inklink.host.state.HostScreenState
 import com.inklink.host.ui.HostActivity
@@ -99,7 +100,10 @@ class InkForegroundService : Service() {
         MessageType.GEOFENCE_CONFIG, MessageType.AUDIO_START, MessageType.AUDIO_STOP,
         MessageType.REQUEST_GPS, MessageType.CMD_RING, MessageType.CMD_STOP_RING,
         MessageType.REFRESH_SCREEN_DEEP, MessageType.SCREEN_CACHE_RESTORE,
-        MessageType.CMD_PLAY_SOUND, MessageType.CMD_PET_EVENT
+        MessageType.CMD_PLAY_SOUND, MessageType.CMD_PET_EVENT,
+        // 主控端连接即宣告的 PING（局域网模式首个用户指令前 Host 默认目标为空，
+        // 收不到宣告就不会启动心跳，主控端看护提醒会误报离线）
+        MessageType.PING
     )
 
     private val batteryReceiver = object : BroadcastReceiver() {
@@ -165,6 +169,9 @@ class InkForegroundService : Service() {
 
         registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         setupAlarmPing()
+        // 宠物促活链初始调度：scheduleNextCheck 原先只在广播到达后调用，
+        // 首次安装/重启后若无历史广播，4 小时促活闹钟永不启动
+        PetWakeupReceiver.scheduleNextCheck(this)
 
         hostState.appendLog("前台服务启动")
     }
@@ -211,6 +218,11 @@ class InkForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // 受控端用户手动关闭响铃横幅：只清 UI 标志不够，必须让 SirenManager 停播
+        if (intent?.action == ACTION_STOP_RING) {
+            if (::sirenManager.isInitialized) runCatching { sirenManager.stopRing() }
+            hostState.setRinging(false)
+        }
         // 权限补授后再次 startService 可升级前台服务类型（按已授权限重新计算）
         runCatching { startAsForeground() }
         startModules()
@@ -1231,6 +1243,9 @@ class InkForegroundService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val REASON_NO_PERMISSION = "NO_PERMISSION"
         private const val REASON_BUSY = "BUSY"
+
+        /** 受控端用户点击响铃横幅"关闭"：需真正停止 SirenManager，而非仅清 UI 标志 */
+        const val ACTION_STOP_RING = "com.inklink.host.action.STOP_RING"
 
         private val _petEventFlow = kotlinx.coroutines.flow.MutableSharedFlow<PetUiEvent>(extraBufferCapacity = 16)
         val petEventFlow: kotlinx.coroutines.flow.SharedFlow<PetUiEvent> = _petEventFlow

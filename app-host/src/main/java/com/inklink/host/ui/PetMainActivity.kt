@@ -1675,14 +1675,8 @@ class PetMainActivity : AppCompatActivity() {
         updatePetUi(petStateManager.getActivePet())
     }
 
-    /** 物种 emoji（背包卡片展示），20 物种全覆盖。 */
-    private fun typeEmoji(type: String): String = when (type) {
-        "cat" -> "🐱"; "dog" -> "🐶"; "rabbit" -> "🐰"; "penguin" -> "🐧"; "hamster" -> "🐹"
-        "panda" -> "🐼"; "fox" -> "🦊"; "dragon" -> "🐉"; "sheep" -> "🐑"; "hedgehog" -> "🦔"
-        "bear" -> "🐻"; "tiger" -> "🐯"; "wolf" -> "🐺"; "turtle" -> "🐢"; "bird" -> "🐦"
-        "mouse" -> "🐭"; "fish" -> "🐟"
-        else -> "🐾"
-    }
+    /** 物种 emoji（背包卡片展示）：唯一数据源 PetCatalog，杜绝硬编码表漏新增物种回落 🐾。 */
+    private fun typeEmoji(type: String): String = PetCatalog.speciesOf(type).emoji
 
     /** 物种中文名（商店/背包/切换提示展示用），直接查 PetCatalog。 */
     private fun typeName(type: String): String = PetCatalog.speciesOf(type).name
@@ -2219,9 +2213,11 @@ class PetMainActivity : AppCompatActivity() {
         super.onResume()
         // 外观模式可能已在管控页切换，回到宠物页时重新应用
         petSpriteView.setRenderMode(com.inklink.host.state.PetRenderMode.get(this))
-        // 双时钟：后台段按 ÷20+地板 settle 后，才允许翻转为前台全速
+        // 双时钟：必须先把"离开前台期间"按后台倍率结清，再翻转为前台全速
+        // （顺序反了会让整段后台时间按前台速率结算，裁决 #1 明确禁止混叠）
+        val settledPet = petStateManager.recalculateState()
         PetClock.foreground = true
-        updatePetUi(petStateManager.recalculateState())
+        updatePetUi(settledPet)
         aiEngine?.start()
         startMinuteTicker()
         // 离线期间里程碑可能变化，重置基线避免回到界面误报庆祝

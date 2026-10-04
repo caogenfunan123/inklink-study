@@ -105,7 +105,23 @@ class InkControllerApplication : Application() {
         transportManager.setListener(object : TransportListener {
             override fun onTextMessage(message: InkMessage) = route(message)
             override fun onAudioMessage(frame: ByteArray) = audioManager.play(frame)
-            override fun onConnectionChanged(connected: Boolean) = controllerState.setConnected(connected)
+            override fun onConnectionChanged(connected: Boolean) {
+                controllerState.setConnected(connected)
+                // 连接建立即向受控端宣告设备 ID：受控端据此设定回包目标并启动心跳，
+                // 否则局域网模式下首个用户指令前 Host 默认目标为空、不发 PING，
+                // 看护提醒 45s 无信号会误报离线
+                if (connected) {
+                    runCatching {
+                        transportManager.sendMessage(
+                            InkMessage.control(
+                                MessageType.PING,
+                                from = deviceId,
+                                payload = """{"deviceId":"$deviceId","timestamp":${System.currentTimeMillis()}}"""
+                            )
+                        )
+                    }
+                }
+            }
         })
         createNotificationChannel()
         careMonitor.start()
@@ -139,10 +155,26 @@ class InkControllerApplication : Application() {
         switchAblyChannel()
     }
 
-    /** 配对密钥，与受控端约定一致（默认 inklink_default_key），用于派生 Ably 私有频道名。 */
-    val pairingKey: String
+    /**
+     * 配对密钥：与受控端约定一致，用于派生 Ably 私有频道名（inklink-pet-${key}），
+     * 同时是受控端远程重置 PIN 的 HMAC 密钥。默认为公开源码内置密钥，任何人可猜测，
+     * 应由两端协商改为一致的私有值（主控端设置 → 配对密钥设置）。
+     */
+    var pairingKey: String
+        get() = prefs.getString(KEY_PAIRING_KEY, null)?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_PAIRING_KEY
+        set(value) {
+            prefs.edit()
+                .putString(KEY_PAIRING_KEY, value.trim().ifBlank { DEFAULT_PAIRING_KEY })
+                .apply()
+        }
+
+    /** 是否仍为公开源码默认配对密钥（两端应协商改为私有值）。 */
+    val pairingKeyIsDefault: Boolean
+        get() = pairingKey == DEFAULT_PAIRING_KEY
+
+    private val prefs
         get() = getSharedPreferences("inklink_controller", MODE_PRIVATE)
-            .getString("pairing_key", "inklink_default_key") ?: "inklink_default_key"
 
     /**
      * Ably Root Key:家长端"Ably 密钥"弹窗填写优先(存 prefs),否则回落 BuildConfig
@@ -543,5 +575,8 @@ class InkControllerApplication : Application() {
 
         /** 告警通知点击跳转 MapActivity 时聚焦的设备 ID extra。 */
         const val EXTRA_FOCUS_DEVICE = "extra_focus_device"
+
+        private const val KEY_PAIRING_KEY = "pairing_key"
+        const val DEFAULT_PAIRING_KEY = "inklink_default_key"
     }
 }

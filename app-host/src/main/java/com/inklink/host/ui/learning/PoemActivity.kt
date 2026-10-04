@@ -39,6 +39,7 @@ class PoemActivity : AppCompatActivity() {
     private lateinit var optionButtons: List<MaterialButton>
     private lateinit var tvError: TextView
     private var quiz: Pair<Int, String>? = null // <空缺在净化行中的下标, 答案字>
+    private var quizAnswered = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -123,6 +124,7 @@ class PoemActivity : AppCompatActivity() {
         tvQuizLine.text = sb.toString()
         cardRead.visibility = View.GONE
         cardQuiz.visibility = View.VISIBLE
+        quizAnswered = false
 
         val pool = "春花秋月山水风雪云天日月大小高低远近来去不知白黄青绿红".map { it.toString() }
         val distractors = pool.filter { it != answer && !line.contains(it) }.shuffled().take(3)
@@ -133,7 +135,8 @@ class PoemActivity : AppCompatActivity() {
             btn.backgroundTintList = ContextCompat.getColorStateList(this, android.R.color.white)
             btn.isEnabled = true
             btn.setOnClickListener {
-                if (text.isEmpty()) return@setOnClickListener
+                if (text.isEmpty() || quizAnswered) return@setOnClickListener
+                quizAnswered = true
                 quizCount++
                 if (text == answer) {
                     correct++
@@ -145,9 +148,15 @@ class PoemActivity : AppCompatActivity() {
                 } else {
                     wrongTitles.add(p.title)
                     btn.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_wrong)
-                    btn.isEnabled = false
                     sfx.play(SoundEffectManager.Sfx.GROAN)
-                    PetTtsGate.get(applicationContext).speak("是$answer")
+                    // 高亮正解后前进，避免连点多个错项把准确率分母越扩越大
+                    optionButtons.forEachIndexed { j, b ->
+                        if (opts.getOrElse(j) { "" } == answer) {
+                            b.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_correct)
+                        }
+                    }
+                    pIdx++
+                    handler.postDelayed({ renderPoem() }, 1200)
                 }
             }
         }

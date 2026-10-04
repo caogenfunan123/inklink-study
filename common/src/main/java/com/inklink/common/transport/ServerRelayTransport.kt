@@ -61,6 +61,9 @@ class ServerRelayTransport(
         stopHeartbeat()
         client?.let { runCatching { it.closeBlocking() } }
         client = null
+        // 停掉重连调度线程，避免 TransportManager 切换模式后旧实例线程常驻
+        reconnectExecutor.shutdownNow()
+        listener?.onConnectionChanged(false)
     }
 
     override fun isConnected(): Boolean = client?.isOpen == true

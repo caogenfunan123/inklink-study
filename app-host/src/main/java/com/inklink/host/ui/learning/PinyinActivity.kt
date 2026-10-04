@@ -147,9 +147,15 @@ class PinyinActivity : AppCompatActivity() {
                 } else {
                     wrongPinyin.add(q.pinyin)
                     btn.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_wrong)
-                    btn.isEnabled = false
                     sfx.play(SoundEffectManager.Sfx.GROAN)
-                    PetTtsGate.get(applicationContext).speak("这是${q.char}")
+                    // 高亮正解后前进，避免 answered 拦截后续点击导致课程卡死
+                    optionButtons.forEachIndexed { j, b ->
+                        if (opts.getOrNull(j) == ans) {
+                            b.backgroundTintList = ContextCompat.getColorStateList(this, R.color.math_correct)
+                        }
+                    }
+                    qIdx++
+                    handler.postDelayed({ renderQuestion() }, 1200)
                 }
             }
         }

@@ -19,6 +19,9 @@ object PermissionUtil {
     const val LOCATION = Manifest.permission.ACCESS_FINE_LOCATION
     const val LOCATION_COARSE = Manifest.permission.ACCESS_COARSE_LOCATION
 
+    /** 定位权限组合（申请时 FINE + COARSE 一起要，任一授予即可用）。 */
+    val LOCATION_PERMS = arrayOf(LOCATION, LOCATION_COARSE)
+
     // 录音权限（语音对讲必需）
     const val RECORD_AUDIO = Manifest.permission.RECORD_AUDIO
 
@@ -33,6 +36,10 @@ object PermissionUtil {
         permissions.all {
             ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
         }
+
+    /** 定位权限是否已授予（精细或粗略任一即可）。 */
+    fun hasLocation(context: Context): Boolean =
+        hasPermissions(context, LOCATION) || hasPermissions(context, LOCATION_COARSE)
 
     /** 是否存在任一未被授予的权限（用于首启弹窗引导）。 */
     fun needsRequest(context: Context, vararg permissions: String): Boolean =

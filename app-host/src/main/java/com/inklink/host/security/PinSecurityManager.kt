@@ -68,7 +68,8 @@ class PinSecurityManager(private val context: Context) {
         val savedHash = prefs.getString(KEY_PIN_HASH, null) ?: return false
         val inputHash = hashPin(pin)
 
-        if (savedHash == inputHash) {
+        // 恒定时间比较：== 会因首个不同字符提前返回，泄露前缀信息（时序侧信道）
+        if (MessageDigest.isEqual(savedHash.toByteArray(Charsets.UTF_8), inputHash.toByteArray(Charsets.UTF_8))) {
             prefs.edit().putInt(KEY_FAILED_COUNT, 0).apply()
             isUnlocked = true
             return true

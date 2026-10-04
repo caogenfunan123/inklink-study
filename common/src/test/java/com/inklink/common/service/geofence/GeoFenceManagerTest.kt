@@ -68,18 +68,19 @@ class GeoFenceManagerTest {
         manager.updateFences(listOf(home, school))
         assertEquals(listOf(home, school), manager.currentFences())
 
-        // 进入家（两次确认）
+        // 进入家：两次确认
         assertTrue(manager.onLocation(31.2304, 121.4737).isEmpty())
         assertEquals(listOf(FenceEvent.Enter(home)), manager.onLocation(31.2304, 121.4737))
         assertTrue(manager.isInside())
 
-        // 同一时刻离开家且进入学校：一次采样产生两个事件
+        // 同一时刻离开家且进入学校：每个围栏各自需两次确认
+        assertTrue(manager.onLocation(31.0400, 121.3800).isEmpty())
         val events = manager.onLocation(31.0400, 121.3800)
         assertEquals(listOf(FenceEvent.Exit(home), FenceEvent.Enter(school)), events)
         assertTrue(manager.isInside())
 
-        // 离开学校
-        assertEquals(listOf(FenceEvent.Exit(school)), manager.onLocation(31.0500, 121.3900))
+        // 离开学校：两次确认
+        assertTrue(manager.onLocation(31.0500, 121.3900).isEmpty())
         assertEquals(listOf(FenceEvent.Exit(school)), manager.onLocation(31.0500, 121.3900))
         assertFalse(manager.isInside())
     }
@@ -91,12 +92,16 @@ class GeoFenceManagerTest {
         val manager = GeoFenceManager(confirmCount = 2)
         manager.updateFences(listOf(a, b))
 
-        // 进入 a 候选（b 无关）
+        // 进入 a 候选（b 无感知）
         assertTrue(manager.onLocation(31.2304, 121.4737).isEmpty())
-        // 在 b 内的采样不应推进 a 的去抖
+        // b 内首次采样：b 候选，a 的确认节奏不受影响
+        assertTrue(manager.onLocation(31.2400, 121.4800).isEmpty())
+        // b 第二次确认 → Enter(b)
         assertEquals(listOf(FenceEvent.Enter(b)), manager.onLocation(31.2400, 121.4800))
-        // a 第二次确认进入
+        // a 仍需自己的两次连续确认
+        assertTrue(manager.onLocation(31.2304, 121.4737).isEmpty())
         assertEquals(listOf(FenceEvent.Enter(a)), manager.onLocation(31.2304, 121.4737))
+        assertTrue(manager.isInside())
     }
 
     @Test

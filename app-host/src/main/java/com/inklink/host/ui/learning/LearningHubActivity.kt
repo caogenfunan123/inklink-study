@@ -75,7 +75,11 @@ class LearningHubActivity : AppCompatActivity() {
             else openLesson(module, review = true)
         }
         findViewById<View>(R.id.cardWrong).setOnClickListener { startActivity(Intent(this, WrongBookActivity::class.java)) }
-        findViewById<View>(R.id.cardFocus).setOnClickListener { startActivity(Intent(this, SchulteGridActivity::class.java)) }
+        findViewById<View>(R.id.cardFocus).setOnClickListener {
+            // 舒尔特方格同为学习模块，必须过护眼三规则（曾绕过 guardPass 直启）
+            if (!guardPass()) return@setOnClickListener
+            startActivity(Intent(this, SchulteGridActivity::class.java))
+        }
         findViewById<View>(R.id.cardEnglish).setOnClickListener { comingSoon() }
     }
 

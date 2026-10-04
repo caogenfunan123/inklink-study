@@ -56,8 +56,23 @@ class InkHostApplication : Application() {
             prefs().edit().putString(KEY_ABLY_KEY, value).apply()
         }
 
-    val pairingKey: String
-        get() = prefs().getString(KEY_PAIRING_KEY, "inklink_default_key") ?: "inklink_default_key"
+    /**
+     * 配对密钥：派生 Ably 私有频道名（inklink-pet-${key}）与远程重置 PIN 的 HMAC 密钥。
+     * 受控端与主控端必须一致；默认为公开源码内置密钥，任何人可猜测频道名并伪造指令，
+     * 应由两端协商改为私有值（宿主设置 → 配对密钥设置）。
+     */
+    var pairingKey: String
+        get() = prefs().getString(KEY_PAIRING_KEY, null)?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_PAIRING_KEY
+        set(value) {
+            prefs().edit()
+                .putString(KEY_PAIRING_KEY, value.trim().ifBlank { DEFAULT_PAIRING_KEY })
+                .apply()
+        }
+
+    /** 是否仍为公开源码默认配对密钥（频道名可预测，存在伪造远程重置 PIN 指令风险）。 */
+    val pairingKeyIsDefault: Boolean
+        get() = pairingKey == DEFAULT_PAIRING_KEY
 
     fun sendChatText(text: String) {
         transportManager.sendMessage(InkMessage.text(MessageType.CHAT_TEXT, text, from = deviceId))
@@ -92,6 +107,7 @@ class InkHostApplication : Application() {
         private const val KEY_ABLY_KEY = "ably_key"
 
         const val KEY_PAIRING_KEY = "pairing_key"
+        const val DEFAULT_PAIRING_KEY = "inklink_default_key"
         const val MODE_LOCAL = "local"
         const val MODE_RELAY = "relay"
         const val MODE_ABLY = "ably"

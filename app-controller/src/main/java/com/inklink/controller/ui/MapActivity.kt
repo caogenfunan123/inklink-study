@@ -10,6 +10,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import com.inklink.common.service.geofence.GeofenceConfig
 import com.inklink.common.utils.CoordinateConverter
+import com.inklink.common.utils.PermissionUtil
 import com.inklink.controller.BuildConfig
 import com.inklink.controller.InkControllerApplication
 import com.inklink.controller.R
@@ -88,7 +89,12 @@ class MapActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_history).setOnClickListener { showHistoryDialog() }
         findViewById<Button>(R.id.btn_export).setOnClickListener { showExportDialog() }
 
-        app.startSelfLocation()
+        if (PermissionUtil.hasLocation(this)) {
+            app.startSelfLocation()
+        } else {
+            // 未授权不发采集：GpsManager.start() 会抛 SecurityException；拒绝即无自身标记，功能降级
+            PermissionUtil.request(this, REQUEST_LOCATION, *PermissionUtil.LOCATION_PERMS)
+        }
         handleIntent(intent)
         render()
     }
@@ -468,5 +474,6 @@ class MapActivity : AppCompatActivity() {
         const val PLAYBACK_COLOR = 0xFFFF6D00.toInt()
         const val FENCE_COLOR = 0xFFE53935.toInt()
         const val FENCE_FILL = 0x28E53935
+        private const val REQUEST_LOCATION = 101
     }
 }

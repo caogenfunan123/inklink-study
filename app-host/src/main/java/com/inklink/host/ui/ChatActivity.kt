@@ -95,6 +95,12 @@ class ChatActivity : AppCompatActivity() {
         VoicePlayer.stop()
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        // 按住录音键时直接划屏退出：不收尾会泄漏 MediaRecorder 与临时录音文件
+        if (recorder.isRecording()) recorder.stop()
+    }
+
     private fun startRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
