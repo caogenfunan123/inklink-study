@@ -74,7 +74,7 @@
 | L5 | TransportManager.sameTarget 早退不刷新 heartbeatIntervalProvider | **已修**：sameTarget 先刷新 provider；`heartbeatIntervalProvider` 上提 `IMessageTransport` 接口 |
 | L6 | VoicePlayer 同步文件 IO 在主线程调用点 | **已修**：IO 线程落盘 → 主线程创建 MediaPlayer（Looper 纪律，踩过坑），临时文件随下次播放/停止删除 |
 | L7 | RawSoundPlayer.releaseActive 无完成回调，连发音效可能截断 | **已修**：新增 `Result.INTERRUPTED`，被打断时先兑现旧回调（否则 ACK 悬挂）；PetAudioFeedback 被打断不再接读（避免叠音） |
-| L8 | PinSecurityManager 盐为静态常量 `inklink_salt_`（彩虹表风险） | **保留（需产品决策）**：改随机盐会导致存量 PIN 失效，需配套迁移 |
+| L8 | PinSecurityManager 盐为静态常量 `inklink_salt_`（彩虹表风险） | **已修（零失效迁移）**：setPin 改用每 PIN 随机盐（hex）持久化；存量静态盐哈希首次校验通过后透明迁移为随机盐；resetPinRemote 收到对端计算的哈希时按遗留盐约定存储后再迁移。时序侧信道此前已修（`MessageDigest.isEqual`） |
 | L9 | 死代码：showDailyGoalSheet / dueReviewCount / SoundEffectManager.soundPool | **澄清+已删**：dueReviewCount/soundPool 实际在用（误标）；showDailyGoalSheet 确为死代码（功能已在背包页接线），已删函数 |
 | L10 | WrongBookActivity 难度写死 | **已修**：`WrongItem` 带出 `level`（取答错时的关卡），替换写死的 2 |
 | L11 | ChatActivity(controller) 对话框守卫 / HistoryClientTest 无缝缓冲用例 / MapActivity 视角切换未接线 | **澄清+补测**：异步路径早有 isDestroyed/isFinishing 守卫、无视角切换按钮；已补"受控端重生成更小分块集"无缝衔接用例 |
