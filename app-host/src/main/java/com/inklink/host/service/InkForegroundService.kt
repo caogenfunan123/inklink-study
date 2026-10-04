@@ -255,8 +255,10 @@ class InkForegroundService : Service() {
         // 只放播放器（MediaPlayer）；TTS 单例留给 UI/广播接收器，服务重建时不必重新 bind 引擎
         audioFeedback?.stopAll()
         audioFeedback = null
+        // 历史补传执行器与轨迹落盘线程停掉，防服务反复重建时线程泄漏
+        historyExecutor.shutdown()
         // 轨迹内存缓冲强制落盘，避免丢最后 30s 数据
-        runCatching { trackLogger.flush() }
+        runCatching { trackLogger.close() }
         UdpDiscovery.stopResponder()
         transportManager.disconnect()
         hostState.appendLog("前台服务停止")
@@ -558,7 +560,8 @@ class InkForegroundService : Service() {
         }
     }
 
-    private fun applyGeofence(payload: String?) {        val cfg = runCatching { gson.fromJson(payload, GeofenceConfig::class.java) }.getOrNull() ?: return
+    private fun applyGeofence(payload: String?) {
+        val cfg = runCatching { gson.fromJson(payload, GeofenceConfig::class.java) }.getOrNull() ?: return
         val fences = cfg.toGeoFences()
         geofenceManager.updateFences(fences)
         // 落盘：服务/进程重启后恢复（围栏生命周期对齐设备而非进程）

@@ -56,6 +56,7 @@ class HistoryClientTest {
 
     @After
     fun tearDown() {
+        if (::client.isInitialized) client.close()
         File(context.filesDir, "tracks").deleteRecursively()
     }
 
@@ -101,14 +102,35 @@ class HistoryClientTest {
         client.start("dev-1", 1)
         client.flushForTest()
 
+        // seq 0 与重复的 seq 0（seq 去重）+ seq 1 携带与 seq 0 相同的点（内容去重）
         client.onChunk("dev-1", chunk(0, 2, listOf(pointJson(base, 31.0))))
         client.onChunk("dev-1", chunk(0, 2, listOf(pointJson(base, 31.0))))
-        client.onChunk("dev-1", chunk(1, 2, listOf(pointJson(base + 5_000, 31.1))))
+        client.onChunk("dev-1", chunk(1, 2, listOf(pointJson(base, 31.0))))
         client.flushForTest()
 
         assertTrue(state.historyProgress!!.done)
         assertEquals(1, state.historyProgress!!.inserted)
         assertEquals(1, store.totalPoints("dev-1"))
+    }
+
+    @Test
+    fun `seq越界或total非法的块被忽略`() {
+        client.start("dev-1", 1)
+        client.flushForTest()
+
+        client.onChunk("dev-1", chunk(0, 1, listOf(pointJson(base, 31.0))))
+        client.flushForTest()
+        // 收满 total=1 完成后，迟到且越界的块不得复活任务或误报
+        client.onChunk(
+            "dev-1",
+            com.inklink.common.protocol.payload.HistoryChunkPayload(
+                reqId = reqId, seq = 5, total = 0, data = ""
+            )
+        )
+        client.flushForTest()
+
+        assertEquals(1, store.totalPoints("dev-1"))
+        assertTrue(state.historyProgress!!.done)
     }
 
     @Test

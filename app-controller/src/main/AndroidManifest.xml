@@ -69,6 +69,11 @@
             android:screenOrientation="portrait" />
 
         <activity
+            android:name=".ui.DeviceDetailActivity"
+            android:exported="false"
+            android:screenOrientation="portrait" />
+
+        <activity
             android:name=".ui.PetDetailActivity"
             android:exported="false"
             android:screenOrientation="portrait" />

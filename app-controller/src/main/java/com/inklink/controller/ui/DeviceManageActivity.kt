@@ -1,5 +1,6 @@
 package com.inklink.controller.ui
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.widget.Button
@@ -18,7 +19,7 @@ import com.inklink.controller.state.ControllerState
  * 设备管理页面：绑定多台受控端（deviceId + 备注），点选作为当前操作目标。
  *
  * - 点条目：选中该设备作为定向消息/围栏下发的目标。
- * - 长按条目：删除或修改备注。
+ * - 长按条目：修改备注 / 删除 / 拉取历史轨迹 / 查看详情（单设备聚合页）。
  */
 class DeviceManageActivity : AppCompatActivity() {
 
@@ -151,7 +152,8 @@ class DeviceManageActivity : AppCompatActivity() {
         val items = arrayOf(
             getString(R.string.edit_nickname),
             getString(R.string.delete),
-            getString(R.string.fetch_history)
+            getString(R.string.fetch_history),
+            getString(R.string.device_detail)
         )
         AlertDialog.Builder(this)
             .setTitle(device.nickname.ifBlank { device.deviceId.take(8) })
@@ -163,6 +165,10 @@ class DeviceManageActivity : AppCompatActivity() {
                         render()
                     }
                     2 -> showHistoryFetchDialog(device)
+                    3 -> startActivity(
+                        Intent(this, DeviceDetailActivity::class.java)
+                            .putExtra(DeviceDetailActivity.EXTRA_DEVICE_ID, device.deviceId)
+                    )
                 }
             }
             .show()

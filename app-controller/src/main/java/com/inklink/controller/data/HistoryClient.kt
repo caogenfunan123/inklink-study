@@ -2,11 +2,7 @@ package com.inklink.controller.data
 
 import android.util.Base64
 import com.google.gson.Gson
-import com.inklink.common.protocol.InkMessage
-import com.inklink.common.protocol.MessageType
-import com.inklink.common.protocol.payload.HistoryAckPayload
 import com.inklink.common.protocol.payload.HistoryChunkPayload
-import com.inklink.common.protocol.payload.HistoryRequestPayload
 import com.inklink.controller.state.ControllerState
 import com.inklink.controller.state.HistoryProgress
 import java.io.ByteArrayInputStream
@@ -69,6 +65,8 @@ class HistoryClient(
     }
 
     init {
+        // 调度周期为 stallTimeoutMs/2，须 >= 1ms，否则 ScheduledExecutorService 拒绝构造
+        require(stallTimeoutMs >= 2) { "stallTimeoutMs 过小: $stallTimeoutMs" }
         io.scheduleWithFixedDelay({ checkStall() }, stallTimeoutMs, stallTimeoutMs / 2, TimeUnit.MILLISECONDS)
     }
 
@@ -92,11 +90,20 @@ class HistoryClient(
         io.execute { cancelInternal() }
     }
 
+    /** 关闭：取消任务并停调度/io 线程（单测 teardown 用；应用内为进程级单例无需调用）。 */
+    fun close() {
+        cancel()
+        io.shutdown()
+    }
+
     /** 处理受控端回传的分块（route 分发，转 io 线程）。 */
     fun onChunk(fromDeviceId: String?, payload: HistoryChunkPayload) {
         io.execute {
             val task = current ?: return@execute
             if (task.finished || task.reqId != payload.reqId || fromDeviceId != task.deviceId) return@execute
+            // total 非法或 seq 越界：受控端缓存回收后重新生成出更小分块集时，
+            // 已收的越大界 seq 计入 received 会提前误判完成 → 直接忽略
+            if (payload.total <= 0 || payload.seq < 0 || payload.seq >= payload.total) return@execute
 
             task.total = payload.total
             if (payload.seq !in task.received) {

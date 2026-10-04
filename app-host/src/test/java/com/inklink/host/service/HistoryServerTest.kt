@@ -37,6 +37,7 @@ class HistoryServerTest {
 
     @After
     fun tearDown() {
+        if (::logger.isInitialized) logger.close()
         File(context.filesDir, "gps_log").deleteRecursively()
     }
 
@@ -95,7 +96,8 @@ class HistoryServerTest {
         val retry = handle(request(base, base + 500_000, acked = listOf(0, 2)))
 
         assertEquals(listOf(1), retry.map { it.seq })
-        assertEquals(1, retry[0].total)
+        // total 恒为本次请求的全部分块数（3 块），补齐进度语义
+        assertEquals(3, retry[0].total)
         assertEquals(40, decode(retry[0]).size)
     }
 

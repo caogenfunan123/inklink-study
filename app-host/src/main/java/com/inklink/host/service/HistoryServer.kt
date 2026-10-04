@@ -39,6 +39,8 @@ class HistoryServer(private val trackLogger: GpsTrackLogger) {
      * 处理拉取请求（调用方保证在后台线程，内部有逐块发送间隔）：
      * flush 轨迹缓冲 → 生成/取缓存分块 → 补发缺失块。
      * 返回本次实际发送的块数（供日志）。
+     *
+     * acked 中越界序号（>= chunks.size）天然无害：forEachIndexed 的 seq 本就只在合法区间。
      */
     fun handleRequest(payload: HistoryRequestPayload, target: String?): Int {
         val sender = sender ?: return 0
@@ -51,21 +53,22 @@ class HistoryServer(private val trackLogger: GpsTrackLogger) {
             if (seq in acked) return@forEachIndexed
             sender(target, HistoryChunkPayload(payload.reqId, seq, chunks.size, data))
             sent++
-            if (chunks.size > 1) {
-                // 逐块间隔，防背靠背触发中转限速；末块不等待
-                if (seq < chunks.size - 1) Thread.sleep(SEND_INTERVAL_MS)
-            }
+            // 逐块间隔，防背靠背触发中转限速；末块不等待
+            if (seq < chunks.size - 1) Thread.sleep(SEND_INTERVAL_MS)
         }
         return sent
     }
 
     /** 收到主控端 ACK：仅刷新缓存优先级（传输进行中防止被回收）。 */
     fun onAck(reqId: String) {
-        cache[reqId]?.let { chunks ->
-            cache.remove(reqId)
-            cache[reqId] = chunks
+        // ACK 走传输回调线程，与 handleRequest 所在的 historyExecutor 并发访问缓存 → 统一加锁
+        synchronized(cache) {
+            cache[reqId]?.let { chunks ->
+                cache.remove(reqId)
+                cache[reqId] = chunks
+            }
+            evictExpiredLocked()
         }
-        evictExpired()
     }
 
     /**
@@ -75,7 +78,7 @@ class HistoryServer(private val trackLogger: GpsTrackLogger) {
      */
     private fun chunksFor(reqId: String, startTs: Long, endTs: Long): List<String> {
         evictExpired()
-        cache[reqId]?.let { return it }
+        synchronized(cache) { cache[reqId]?.let { return it } }
 
         trackLogger.flush()
         val lines = trackLogger.readRange(startTs, endTs).map { gson.toJson(it) }
@@ -86,12 +89,17 @@ class HistoryServer(private val trackLogger: GpsTrackLogger) {
                 Base64.encodeToString(gzip(slice.joinToString("\n")), Base64.NO_WRAP)
             }
         }
-        cache[reqId] = chunks
+        synchronized(cache) { cache[reqId] = chunks }
         return chunks
     }
 
     /** 容量上限回收：仅保留最近 [CACHE_MAX_ENTRIES] 个请求（近似 LRU）。 */
     private fun evictExpired() {
+        synchronized(cache) { evictExpiredLocked() }
+    }
+
+    /** 调用方须持有 [cache] 锁。 */
+    private fun evictExpiredLocked() {
         while (cache.size > CACHE_MAX_ENTRIES) {
             val eldest = cache.keys.firstOrNull() ?: break
             cache.remove(eldest)

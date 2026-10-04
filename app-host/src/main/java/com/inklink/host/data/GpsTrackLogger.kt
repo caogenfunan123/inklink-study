@@ -61,8 +61,13 @@ class GpsTrackLogger(context: Context) {
     /** 读取 [startTs, endTs] 范围内的轨迹点（同步 IO，调用方自行放后台线程，按时间升序）。 */
     fun readRange(startTs: Long, endTs: Long): List<TrackPoint> {
         val out = mutableListOf<TrackPoint>()
+        if (endTs < startTs) return out
+        // 钳制末端：day += DAY_MILLIS 越过 Long.MAX_VALUE 会回绕成负值导致死循环；
+        // 同时限制最大扫描天数，防止调用方传入极端区间时逐天文件探测失控
+        val safeEnd = endTs.coerceAtMost(Long.MAX_VALUE - DAY_MILLIS)
         var day = startTs
-        while (day <= endTs) {
+        var scanDays = 0
+        while (day <= safeEnd && scanDays <= MAX_SCAN_DAYS) {
             val f = File(root, "${dayFormat(day)}.jsonl")
             if (f.isFile) {
                 f.readLines().forEach { line ->
@@ -73,6 +78,7 @@ class GpsTrackLogger(context: Context) {
                 }
             }
             day += DAY_MILLIS
+            scanDays++
         }
         return out.sortedBy { it.t }
     }
@@ -122,6 +128,12 @@ class GpsTrackLogger(context: Context) {
         flush()
     }
 
+    /** 关闭：强制落盘并关停写线程（服务销毁/单测 teardown 调用，防线程泄漏）。 */
+    fun close() {
+        runCatching { flush() }
+        io.shutdown()
+    }
+
     companion object {
         /** accuracy 高于该值（米）的点视为漂移点，不落盘（与主控端 TrackStore 一致）。 */
         const val MAX_ACCURACY_METERS = 50f
@@ -129,6 +141,9 @@ class GpsTrackLogger(context: Context) {
         /** 轨迹文件保留天数。 */
         const val RETENTION_DAYS = 30L
         private const val DAY_MILLIS = 24 * 60 * 60 * 1000L
+
+        /** readRange 单次扫描的天数上限（约 100 年，覆盖全部合法 epoch 区间）。 */
+        private const val MAX_SCAN_DAYS = 36_600
         private const val FLUSH_INTERVAL_SEC = 30L
         private val DAY_PATTERN = Regex("\\d{8}")
 

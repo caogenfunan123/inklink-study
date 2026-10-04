@@ -2,6 +2,7 @@ package com.inklink.controller.data
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.google.gson.Gson
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -100,5 +101,24 @@ class TrackStoreMergeTest {
         store.appendPoints("dev-1", listOf(point(base, acc = 80f), point(base + 1, acc = 10f))) { inserted = it }
         store.flushForTest()
         assertEquals(1, inserted)
+    }
+
+    @Test
+    fun `受控端落盘JSONL格式可直接解析合并`() {
+        // 锁定两端「零转换」契约：GpsTrackLogger 落盘行的键名（t/la/lo/sp/ac）
+        // 必须能被 TrackStore.TrackPoint 直接解析并并入
+        val hostLine = """{"t":$base,"la":31.123456,"lo":121.654321,"sp":1.5,"ac":10.0}"""
+        val parsed = Gson().fromJson(hostLine, TrackStore.TrackPoint::class.java)
+        assertEquals(base, parsed.t)
+        assertEquals(31.123456, parsed.la, 1e-9)
+        assertEquals(121.654321, parsed.lo, 1e-9)
+        assertEquals(1.5f, parsed.sp, 1e-6f)
+        assertEquals(10.0f, parsed.ac, 1e-6f)
+
+        var inserted = -1
+        store.appendPoints("dev-1", listOf(parsed)) { inserted = it }
+        store.flushForTest()
+        assertEquals(1, inserted)
+        assertEquals(1, store.totalPoints("dev-1"))
     }
 }

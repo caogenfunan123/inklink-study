@@ -27,6 +27,7 @@ class GpsTrackLoggerTest {
 
     @After
     fun tearDown() {
+        if (::logger.isInitialized) logger.close()
         File(context.filesDir, "gps_log").deleteRecursively()
     }
 

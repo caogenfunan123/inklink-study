@@ -30,9 +30,16 @@ import com.tencent.tencentmap.mapsdk.maps.model.LatLng
  * 围栏编辑页面（多围栏）：点击地图选择圆心，SeekBar 调整半径，「添加围栏」入列，
  * 支持命名与删除，「下发全部围栏」把整个列表下发 GEOFENCE_CONFIG 给受控端。
  *
+ * 目标设备：优先取 Intent EXTRA_DEVICE_ID（设备详情页穿透下发，不依赖全局选中态），
+ * 缺失时回退 controllerState.selectedDeviceId。
+ *
  * 协议向后兼容：列表第 0 个同时写入旧字段 lat/lng/radius（旧受控端只认主围栏）。
  */
 class FenceEditActivity : AppCompatActivity(), TencentMap.OnMapClickListener {
+
+    companion object {
+        const val EXTRA_DEVICE_ID = "extra_device_id"
+    }
 
     private lateinit var mapView: MapView
     private lateinit var tencentMap: TencentMap
@@ -50,9 +57,15 @@ class FenceEditActivity : AppCompatActivity(), TencentMap.OnMapClickListener {
     private var radius = 300.0
     private val gson = Gson()
 
+    /** 本页围栏所属设备：Intent 显式传入优先，否则用全局选中设备。 */
+    private var target: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_fence_edit)
+
+        target = intent.getStringExtra(EXTRA_DEVICE_ID)
+            ?: (application as InkControllerApplication).controllerState.selectedDeviceId
 
         mapView = findViewById(R.id.map_view)
         tvRadius = findViewById(R.id.tv_radius)
@@ -60,9 +73,9 @@ class FenceEditActivity : AppCompatActivity(), TencentMap.OnMapClickListener {
         tencentMap = mapView.map
         tencentMap.setOnMapClickListener(this)
 
-        // 初始中心：选中设备的最新位置（若已选中），否则最近一次上报位置
+        // 初始中心：目标设备的最新位置（若已选中），否则最近一次上报位置
         val app = application as InkControllerApplication
-        val gps = app.controllerState.selectedDeviceId
+        val gps = target
             ?.let { app.controllerState.gpsByDevice[it] }
             ?: app.controllerState.latestGps
         gps?.let {
@@ -86,7 +99,7 @@ class FenceEditActivity : AppCompatActivity(), TencentMap.OnMapClickListener {
         updateRadiusLabel()
 
         // 预加载该设备已存档围栏
-        app.controllerState.selectedDeviceId
+        target
             ?.let { app.deviceRepository.findByDeviceId(it)?.fences }
             ?.let { saved ->
                 pendingFences.addAll(saved)
@@ -245,18 +258,18 @@ class FenceEditActivity : AppCompatActivity(), TencentMap.OnMapClickListener {
             return
         }
         val app = application as InkControllerApplication
-        val target = app.controllerState.selectedDeviceId
-        if (target == null) {
+        val dest = target
+        if (dest == null) {
             Toast.makeText(this, R.string.no_target_selected, Toast.LENGTH_SHORT).show()
             return
         }
         val geoFences = pendingFences.map { GeoFence(it.lat, it.lng, it.radius, it.name) }
         val cfg = GeofenceConfig.fromList(geoFences)
         app.transportManager.sendMessage(
-            InkMessage.text(MessageType.GEOFENCE_CONFIG, gson.toJson(cfg), from = app.deviceId, target = target)
+            InkMessage.text(MessageType.GEOFENCE_CONFIG, gson.toJson(cfg), from = app.deviceId, target = dest)
         )
         // 主控端记住最后下发的围栏（WGS-84），地图页可视化
-        app.deviceRepository.updateFences(target, pendingFences.toList())
+        app.deviceRepository.updateFences(dest, pendingFences.toList())
         Toast.makeText(this, R.string.fence_sent, Toast.LENGTH_SHORT).show()
         finish()
     }
