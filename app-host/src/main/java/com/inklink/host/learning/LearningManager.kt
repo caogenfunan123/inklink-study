@@ -203,7 +203,9 @@ class LearningManager private constructor(context: Context) {
         @SerializedName("author") val author: String,
         @SerializedName("dynasty") val dynasty: String,
         @SerializedName("lines") val lines: List<String>,
-        @SerializedName("pinyins") val pinyins: List<List<String>>? = null,
+        // 行级拼音（poems.json 每行一句拼音字符串），与 hanzi 的逐字嵌套数组形状不同——
+        // 曾误声明为 List<List<String>> 导致 Gson 抛 Expected BEGIN_ARRAY，古诗功能整体失效
+        @SerializedName("pinyins") val pinyins: List<String>? = null,
         @SerializedName("trans") val trans: String? = null,
         @SerializedName("level") val level: Int
     )
