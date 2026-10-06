@@ -80,6 +80,13 @@
 | L11 | ChatActivity(controller) 对话框守卫 / HistoryClientTest 无缝缓冲用例 / MapActivity 视角切换未接线 | **澄清+补测**：异步路径早有 isDestroyed/isFinishing 守卫、无视角切换按钮；已补"受控端重生成更小分块集"无缝衔接用例 |
 | L12 | TrackStore.cleanup() 内 synchronized 无实际临界区 | **澄清关闭**：现行 cleanup 无 synchronized（复审后已变） |
 
+## 4b. 古诗资产契约批次（2026-10-06）
+
+| 事项 | 处置 |
+|------|------|
+| 古诗亭整体失效：`Expected BEGIN_ARRAY but was STRING at $[0].pinyins[0]` | **已修**：poems.json 的 pinyins 为行级字符串数组，`Poem.pinyins` 误抄 hanzi 的 `List<List<String>>` 形状，改为 `List<String>?`；新增 `PoemAssetContractTest`（真实模型解析真实资产，校验规模/字段非空/行数对齐/level 合法） |
+| 契约测试首跑抓出数据瑕疵 | **已清洗**：浣溪沙·游蕲水清泉寺词序与正文间的空串分隔符（lines/pinyins 同步删保持对齐）；题临安壁翻译字段为爬虫残渣"韵译"，补正确译文。CI 绿（b92f623） |
+
 ## 5. AI 接手必读（本轮强化）
 
 1. **CI 必须覆盖 `:common`**：本轮 C5/C7——GeoFenceManagerTest 红用例因 common 测试不进 CI 潜伏了大半年。
@@ -90,3 +97,4 @@
 6. **弹窗/对话框异步出口**：一律 `isDestroyed/isFinishing` 双检后再 show。
 7. **MediaPlayer 必须创建在有 Looper 的线程**（通常是主线程）：其构造函数内部 `new Handler()` 取当前线程 Looper，工作线程上直接抛 "Can't create handler inside thread that has not called Looper.prepare()"；需要 IO 时"后台落盘 → 主线程创建"，参考 `VoicePlayer`/`RawSoundPlayer`。
 8. **接口上提取公共能力属性**：`heartbeatIntervalProvider` 原在三传输类各写一份，`TransportManager.sameTarget` 早退时就漏刷新——上提 `IMessageTransport` 接口后单点刷新，同类"早退不同步"坑一次根除。
+9. **资产契约测试先行**：新增/改动 assets JSON 必须配套 `*AssetContractTest`（真实模型解析真实资产，断言规模、字段非空、行数对齐、枚举合法），形状假设要对着文件核，第三方爬取数据先当有脏数据对待。
