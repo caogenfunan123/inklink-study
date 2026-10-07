@@ -87,6 +87,32 @@
 | 古诗亭整体失效：`Expected BEGIN_ARRAY but was STRING at $[0].pinyins[0]` | **已修**：poems.json 的 pinyins 为行级字符串数组，`Poem.pinyins` 误抄 hanzi 的 `List<List<String>>` 形状，改为 `List<String>?`；新增 `PoemAssetContractTest`（真实模型解析真实资产，校验规模/字段非空/行数对齐/level 合法） |
 | 契约测试首跑抓出数据瑕疵 | **已清洗**：浣溪沙·游蕲水清泉寺词序与正文间的空串分隔符（lines/pinyins 同步删保持对齐）；题临安壁翻译字段为爬虫残渣"韵译"，补正确译文。CI 绿（b92f623） |
 
+## 4c. 第三轮全仓复盘批次（2026-10-07）
+
+> 范围：古诗批次收口后的第三轮全仓复审（common / app-host / app-controller 分区深查 + 逐条读源码坐实）。修复分两批提交：`e451b2d`（P0/P1/基础 P2）、`073bd91`（串台/主线程 IO/监听/假开关）。
+
+| # | 问题 | 位置 | 修复 |
+|---|------|------|------|
+| R0 | 畸形围栏（radius<=0/坐标越界）让 `GeoFence require` 在 Ably 传输回调线程抛异常，回调线程死亡后彻底失联 | `InkForegroundService.applyGeofence` / `GeofenceConfig` | 新增 `toGeoFencesOrNull()` 校验（radius>0/经纬度有界/有限），拒绝时回 `CODE_EXECUTION_ERROR` ack；`routeTextMessage` 整体 `runCatching` 兜底，单分支异常不再杀回调线程 |
+| R1 | 墙钟窗口 10 处：服务 45s PONG 超时、SOS/连点/节流、PetStateManager persist 限流与随机事件冷却、CareMonitor 全量 ts、ControllerState lastSeen、PetAiEngine 台词冷却、UdpDiscovery 扫描、PixelProgressBarView 闪烁、HistoryClient 停滞检测 | 多处 | 全部改 `MonoClock`；HistoryClient 时钟可注入（JVM 单测不被墙钟回拨影响）；PetStateManager 启动时把持久化墙钟折算为等价单调读数，冷却跨重启延续 |
+| R2 | Ably 空 Key 实例被 `sameTarget` 误判复用：用户在弹窗补填 Key 后旧实例 `connect()` 直接 return，永远连不上 | `AblyRelayTransport` / `TransportManager` | 暴露 `ablyKey`，sameTarget ABLY 分支增加 Key 比较 |
+| R3 | MathActivity 双结算（finishLesson 与过期 handler 各结算一次）+ 全程无 `onDestroy`：定时器回调与音效池泄漏 | `MathActivity` | `AtomicBoolean settled` 守卫 + `onDestroy` removeCallbacksAndMessages + `sfx.release()`；四个学习页 onDestroy 统一释放 |
+| R4 | TransportManager pending 竞态三件套：`isConnected()` 与 `sendMessage` 间断窗丢消息、`ArrayDeque` 非线程安全、`flushPending` 持锁 send | `TransportManager` | sendMessage 失败回落 pending；`MAX_PENDING=200` FIFO 淘汰；flush 锁外快照发送；`disconnect(clearPending)` 参数化 |
+| R5 | ChatStore 全局单时间线无设备维度 + controller `target=null` 广播：多孩设备下 A 孩消息串进 B 孩聊天页 | `ChatStore` / `InkControllerApplication` | 消息带 `peerDeviceId`，`all(peer)` 过滤；未选中设备拒绝发送并提示；新增 `ChatStoreTest` |
+| R6 | `SoundEffectManager` toneGen 每次 play 新建泄漏；`LocalTtsManager` 单槽 pendingSpeech 挤字幕 + utteranceId 毫秒撞号 | host audio/tts | toneGen 释放 + released 标志防 lazy 重建；pendingSpeech 改 ArrayDeque + utteranceId 自增序列 + 单一监听分发表 |
+| R7 | `GpsTrackLogger` SimpleDateFormat 四线程（GPS/flush/读/清理）并发；readLines 与清理竞态 | `GpsTrackLogger` | dayFormatter 改 ThreadLocal；readLines 包 runCatching |
+| R8 | LearningManager 三次独立写（发币/进度/日统计）中途被杀出现"发了币没记进度"；MASTERED 重复上课 mastered++ 虚高且 nextReviewTs=0 永不复习 | `LearningManager` | 同一 `runInTransaction` 原子落账；MASTERED 只统计首次掌握 |
+| R9 | ControllerState Map 读-改-写无同步（setGps/setDeviceStatus/markSeen/setLearnSummary 并发串写）；removeDevice 不清 State；ONLINE 阈值 60s 与 CareMonitor 45s 口径矛盾 | `ControllerState` | `stateLock` 同步原子化；新增 `removeDeviceData` 接线；阈值统一 45s |
+| R10 | PetDetailActivity「包裹全局 listener 再还原」：两页面同时注册时一方退出还原掉另一方链路 | `PetDetailActivity` / `TransportManager` | TransportManager 多播 `addListener/removeListener` |
+| R11 | ChatActivity(双端)：每条消息全量 removeAllViews 重建；主线程同步 decode 大图/压缩；按住录音键切后台泄漏 MediaRecorder | host/controller ChatActivity | 增量追加渲染 + `rendered` 去重；位图解码与压缩移后台；onPause 停录音 |
+| R12 | MapActivity：listDays 主线程文件 IO；相机被每次位置更新 animateCamera 拽回（与用户手势抢镜头）；自身定位只启动不停止常驻耗电 | `MapActivity` | 两个入口 IO 移后台；聚焦目标变化才动画；定位跟随 onStart/onStop |
+| R13 | ControllerActivity「局域网模式」只弹 toast 从不 switchMode（假开关）；投屏图片主线程压缩 | `ControllerActivity` | 输入受控端 IP 后真正 connectLocal；压缩移后台 |
+| R14 | TaskPlayActionReceiver onReceive 同步写 Room；双路径（TTS 回调/15s 兜底）重复 finish | `TaskPlayActionReceiver` | 写库与 ACK 移后台；AtomicBoolean 只 finish 一次 |
+| R15 | PetAiEngine 台词 60s 冷却用墙钟（回拨后刷屏）；UdpDiscovery 扫描窗口墙钟与 soTimeout 混用 | 两处 | 改 MonoClock |
+| R16 | KalmanLocationFilter 起步突变不收敛（静止→>1.5m/s） | `KalmanLocationFilter` | 起步时回退 variance=r；新增 `KalmanLocationFilterTest` |
+
+**教训**：第三轮两批 CI 抓出两个编译错（UdpDiscovery 改写丢了 `DatagramPacket` 创建；`clearPending= false` 传给了底层 transport 而非 manager）。本地无 JDK/SDK，改完只能靠 CI，写完新代码必须回读整段确认同名函数/参数归属。
+
 ## 5. AI 接手必读（本轮强化）
 
 1. **CI 必须覆盖 `:common`**：本轮 C5/C7——GeoFenceManagerTest 红用例因 common 测试不进 CI 潜伏了大半年。
@@ -98,3 +124,6 @@
 7. **MediaPlayer 必须创建在有 Looper 的线程**（通常是主线程）：其构造函数内部 `new Handler()` 取当前线程 Looper，工作线程上直接抛 "Can't create handler inside thread that has not called Looper.prepare()"；需要 IO 时"后台落盘 → 主线程创建"，参考 `VoicePlayer`/`RawSoundPlayer`。
 8. **接口上提取公共能力属性**：`heartbeatIntervalProvider` 原在三传输类各写一份，`TransportManager.sameTarget` 早退时就漏刷新——上提 `IMessageTransport` 接口后单点刷新，同类"早退不同步"坑一次根除。
 9. **资产契约测试先行**：新增/改动 assets JSON 必须配套 `*AssetContractTest`（真实模型解析真实资产，断言规模、字段非空、行数对齐、枚举合法），形状假设要对着文件核，第三方爬取数据先当有脏数据对待。
+10. **多设备维度**：任何进程级单例存储（ChatStore/ControllerState）都要问一句"第二个设备进来会怎样"；peer/deviceId 维度要显式建模并在 UI 出口过滤。
+11. **页面级监听不做包裹**：`setListener` 包裹再还原会被并发页面互相还原；用多播 add/remove，成对生命周期。
+12. **CI 红灯先抓日志**：`curl /actions/runs/<id>/logs` zip 解压后 `rg "e: |FAILED"`；编译错的根因多为改写时丢行/参数张冠李戴，修完回读整段。
