@@ -89,7 +89,7 @@
 
 ## 4c. 第三轮全仓复盘批次（2026-10-07）
 
-> 范围：古诗批次收口后的第三轮全仓复审（common / app-host / app-controller 分区深查 + 逐条读源码坐实）。修复分两批提交：`e451b2d`（P0/P1/基础 P2）、`073bd91`（串台/主线程 IO/监听/假开关）。
+> 范围：古诗批次收口后的第三轮全仓复审（common / app-host / app-controller 分区深查 + 逐条读源码坐实）。修复分四批提交：`e451b2d`（P0/P1/基础 P2）、`073bd91`（串台/主线程 IO/监听/假开关）、`ee9b2ab`（CI 抓出的编译错与测试期望）、`4fe2ad6`（停滞用例注入时钟）。CI 绿：run 37569929957。
 
 | # | 问题 | 位置 | 修复 |
 |---|------|------|------|
@@ -111,7 +111,7 @@
 | R15 | PetAiEngine 台词 60s 冷却用墙钟（回拨后刷屏）；UdpDiscovery 扫描窗口墙钟与 soTimeout 混用 | 两处 | 改 MonoClock |
 | R16 | KalmanLocationFilter 静止→起步时协方差未放开：静止期 k≈0.002，首帧只追 4mm，头十几秒轨迹点落后真实位移数米 | `KalmanLocationFilter` | 感知"静止→移动"跃迁立即把协方差放开到观测噪声量级（首帧追半程）；新增 `KalmanLocationFilterTest` 三例（起步放开/步行不掉队/静止抑制）。注：稳态滞后由测量噪声决定（5m 噪声约 10m），不要指望滤波消除它 |
 
-**教训**：第三轮两批 CI 抓出两个编译错（UdpDiscovery 改写丢了 `DatagramPacket` 创建；`clearPending= false` 传给了底层 transport 而非 manager）。本地无 JDK/SDK，改完只能靠 CI，写完新代码必须回读整段确认同名函数/参数归属。
+**教训**：第三轮四批 CI 抓出两类问题——(1) 两个编译错：改写 `UdpDiscovery` 循环时丢了 `DatagramPacket` 创建行；`disconnect(clearPending= false)` 传给了底层 transport（参数在 manager 上）。(2) 三个 Kotlin 表达式的坑：`runCatching` 把 `when` 当表达式后，分支尾部无 `else` 的 `if` 必须显式 `Unit`；lambda 内局部函数改写的 `var` 不能当作 `return` 值在 lambda 外读（要提到 lambda 外）；嵌套类 `Task` 访问不到外层构造属性，时钟必须构造注入。另有测试口径两处失真（`clear` 后监听仍在；起步阈 1.5 与断言同值导致永不触发），教训是**测试断言先离线算再写**。
 
 ## 5. AI 接手必读（本轮强化）
 
