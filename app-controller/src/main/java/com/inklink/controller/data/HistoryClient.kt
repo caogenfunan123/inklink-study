@@ -49,7 +49,9 @@ class HistoryClient(
         val deviceId: String,
         val reqId: String,
         val startTs: Long,
-        val endTs: Long
+        val endTs: Long,
+        /** 停滞判定时钟由外层注入：Task 是嵌套类，访问不到 HistoryClient 的属性。 */
+        private val clock: () -> Long
     ) {
         var total = -1
         val received = HashSet<Int>()
@@ -79,7 +81,7 @@ class HistoryClient(
         val startTs = endTs - days.coerceIn(1, 30) * 24 * 60 * 60 * 1000L
         io.execute {
             cancelInternal()
-            val task = Task(deviceId, UUID.randomUUID().toString(), startTs, endTs)
+            val task = Task(deviceId, UUID.randomUUID().toString(), startTs, endTs, clock)
             current = task
             sendRequest(task, emptyList())
             controllerState.setHistoryProgress(

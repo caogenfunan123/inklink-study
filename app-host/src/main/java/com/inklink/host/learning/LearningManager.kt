@@ -400,6 +400,8 @@ class LearningManager private constructor(context: Context) {
 
         // 奖励入账 + 学习记录 + 日统计走同一事务：中途进程被杀时要么全部生效要么
         // 全部回滚（此前是三次独立写，杀在中间会"发了币但没记进度"）
+        // mastered 需在事务外可读：局部函数改写的捕获变量不能跨 lambda 边界逃逸
+        var mastered = 0
         PetDatabase.get(appContext).runInTransaction {
             // 宠物入账(唯一入口,联动升级/事件日志/礼花)
             if (coinsGranted > 0 || exp > 0) {
@@ -408,7 +410,6 @@ class LearningManager private constructor(context: Context) {
 
             // 进度与复习调度:只结算本关出现过的知识点（同一事务内）
             val now = System.currentTimeMillis()
-            var mastered = 0
             val existing = dao.allProgress(result.module).associateBy { it.itemId }
             fun upsertItem(itemId: String, wasCorrect: Boolean) {
                 val row = existing[itemId] ?: LearnProgressRow(

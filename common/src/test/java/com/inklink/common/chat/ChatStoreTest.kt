@@ -38,22 +38,23 @@ class ChatStoreTest {
     }
 
     @Test
-    fun `add notifies listener`() {
+    fun `add and clear notify listener, removal stops it`() {
         val store = ChatStore()
         var count = 0
-        store.addListener(object : ChatStore.Listener {
+        val listener = object : ChatStore.Listener {
             override fun onChatChanged() { count++ }
-        })
+        }
+        store.addListener(listener)
         store.add(msg(1, "dev-a", "A1"), "dev-a")
         store.add(msg(2, "dev-b", "B1"), "dev-b")
         assertEquals(2, count)
 
-        store.removeListener(object : ChatStore.Listener {
-            override fun onChatChanged() {}
-        })
         store.clear()
-        // clear 只对剩余监听生效；匿名实例从未注册，计数不变
-        assertEquals(2, count)
-        assertTrue(store.all("dev-a").isEmpty())
+        assertEquals(3, count)
+
+        store.removeListener(listener)
+        store.add(msg(3, "dev-a", "A3"), "dev-a")
+        assertEquals(3, count)
+        assertEquals(1, store.all("dev-a").size)
     }
 }

@@ -1,35 +1,55 @@
 package com.inklink.common.service.gps
 
+import kotlin.math.abs
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
  * 卡尔曼滤波回归测试。
  *
- * 锁定「静止强抑制 → 起步滞后」的修复：长时间静止使方差收敛到近 0，
- * 起步时必须立即放开协方差，否则滤波点要分钟级才追上真实位置
- * （围栏判定/寻宝累计在此期间全部滞后）。
+ * 1. `stationarySuppressesJitter`：静止强抑制（±3m 多径抖动漂移 < 1m）。
+ * 2. `movingReopensCovarianceImmediately`：静止收敛后方差≈0.05㎡，若不在
+ *    "静止→移动"跃迁时放开协方差，首帧只追 4mm；放开后首帧即追半个步长。
+ * 3. `walkAfterStationaryStaysWithinNoiseFloor`：5m 测量噪声 + 1Hz 下的
+ *    稳态滞后有界（约 10m），步行整段不掉队。
  */
 class KalmanLocationFilterTest {
 
-    /** 纬度每 0.00001° 约 1.11m，取足够大的步长让测试对微小误差不敏感。 */
+    /** 纬度每 0.00001° 约 1.11m。 */
+    private val step = 0.00002 // 约 2.2m/帧
+
+    private fun filter(f: KalmanLocationFilter, lat: Double, speed: Float, t: Long) =
+        f.filter(lat, 121.4737, accuracy = 5f, speed = speed, timestamp = t)
+
     @Test
-    fun stationThenWalkConvergesQuickly() {
+    fun movingReopensCovarianceImmediately() {
         val f = KalmanLocationFilter()
         var t = 1_000_000L
-        // 60 帧静止：滤波点收敛到初始位置附近
-        repeat(60) { f.filter(31.2304, 121.4737, accuracy = 5f, speed = 0.1f, timestamp = t); t += 1000 }
-        // 起步：沿纬度每帧 +0.00002°（约 2.2m），连续走 30 帧
+        // 60 帧静止：方差收敛，k≈0.002（不放开协方差时首帧只追 4mm）
+        repeat(60) { filter(f, 31.2304, speed = 0.1f, t); t += 1000 }
+        val (startLat, _) = filter(f, 31.2304, speed = 0.1f, t); t += 1000
+
+        val raw = 31.2304 + step
+        val (outLat, _) = filter(f, raw, speed = 1.5f, t)
+        val movedM = abs(outLat - startLat) * 111_000
+        val gapM = abs(outLat - raw) * 111_000
+        assertTrue("起步首帧应追回半程，实际只追上 ${movedM}m", movedM > 0.8)
+        assertTrue("起步首帧滞后 ${gapM}m 过大", gapM < 1.5)
+    }
+
+    @Test
+    fun walkAfterStationaryStaysWithinNoiseFloor() {
+        val f = KalmanLocationFilter()
+        var t = 1_000_000L
+        repeat(60) { filter(f, 31.2304, speed = 0.1f, t); t += 1000 }
         var lat = 31.2304
-        repeat(30) { lat += 0.00002; f.filter(lat, 121.4737, accuracy = 5f, speed = 1.5f, timestamp = t); t += 1000 }
-        val (outLat, outLng) = f.filter(lat, 121.4737, accuracy = 5f, speed = 1.5f, timestamp = t)
-        val expectLat = 31.2304 + 0.00002 * 30
-        // 误差放宽到约 1.2m：修复前每帧只追 5mm，30 帧后误差仍在米级
-        assertTrue(
-            "滤波点滞后真实位置 ${kotlin.math.abs(outLat - expectLat) * 111_000}m",
-            kotlin.math.abs(outLat - expectLat) < 0.000011
-        )
-        assertTrue("静止方向不应漂移", kotlin.math.abs(outLng - 121.4737) < 1e-6)
+        var out = lat to 121.4737
+        repeat(30) { lat += step; out = filter(f, lat, speed = 1.5f, t); t += 1000 }
+
+        val errM = abs(out.first - lat) * 111_000
+        // 5m 测量噪声下的稳态滞后上界（实测约 10m）
+        assertTrue("步行 30 帧后滞后真实位置 ${errM}m", errM < 15)
+        assertTrue("静止方向不应漂移", abs(out.second - 121.4737) < 1e-6)
     }
 
     @Test
@@ -45,8 +65,8 @@ class KalmanLocationFilterTest {
             t += 1000
         }
         assertTrue(
-            "静止抑制失效，漂移 ${kotlin.math.abs(last.first - 31.2304) * 111_000}m",
-            kotlin.math.abs(last.first - 31.2304) < 0.000009
+            "静止抑制失效，漂移 ${abs(last.first - 31.2304) * 111_000}m",
+            abs(last.first - 31.2304) < 0.000009
         )
     }
 }

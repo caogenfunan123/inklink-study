@@ -72,7 +72,7 @@ class SoundEffectManager(private val context: Context) {
                     else gen.startTone(freqToTone(freq), dur)
                 }
             }, offset.toLong())
-            offset += d + 20
+            offset += dur + 20
         }
     }
 

@@ -109,7 +109,7 @@
 | R13 | ControllerActivity「局域网模式」只弹 toast 从不 switchMode（假开关）；投屏图片主线程压缩 | `ControllerActivity` | 输入受控端 IP 后真正 connectLocal；压缩移后台 |
 | R14 | TaskPlayActionReceiver onReceive 同步写 Room；双路径（TTS 回调/15s 兜底）重复 finish | `TaskPlayActionReceiver` | 写库与 ACK 移后台；AtomicBoolean 只 finish 一次 |
 | R15 | PetAiEngine 台词 60s 冷却用墙钟（回拨后刷屏）；UdpDiscovery 扫描窗口墙钟与 soTimeout 混用 | 两处 | 改 MonoClock |
-| R16 | KalmanLocationFilter 起步突变不收敛（静止→>1.5m/s） | `KalmanLocationFilter` | 起步时回退 variance=r；新增 `KalmanLocationFilterTest` |
+| R16 | KalmanLocationFilter 静止→起步时协方差未放开：静止期 k≈0.002，首帧只追 4mm，头十几秒轨迹点落后真实位移数米 | `KalmanLocationFilter` | 感知"静止→移动"跃迁立即把协方差放开到观测噪声量级（首帧追半程）；新增 `KalmanLocationFilterTest` 三例（起步放开/步行不掉队/静止抑制）。注：稳态滞后由测量噪声决定（5m 噪声约 10m），不要指望滤波消除它 |
 
 **教训**：第三轮两批 CI 抓出两个编译错（UdpDiscovery 改写丢了 `DatagramPacket` 创建；`clearPending= false` 传给了底层 transport 而非 manager）。本地无 JDK/SDK，改完只能靠 CI，写完新代码必须回读整段确认同名函数/参数归属。
 

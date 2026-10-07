@@ -38,11 +38,11 @@ class KalmanLocationFilter {
             return lat to lng
         }
 
-        // 起步突变恢复：长时间静止使方差收敛到 ~0.05㎡，卡尔曼增益 k≈0.0005，
-        // 每帧只追 5mm——从静止切换为步行后要上千次更新（分钟级）才追上真实位置，
-        // 期间围栏进出判定与寻宝累计全部滞后。检测到速度跃迁立即把协方差放开到
-        // 当前观测噪声量级（k≈0.5），数帧内收敛。
-        if (prevSpeed in 0f..STATIONARY_SPEED && speed > MOVING_SPEED) {
+        // 起步突变恢复：静止期方差收敛到 ~0.05㎡，卡尔曼增益 k≈0.002，每帧只追 4mm。
+        // 过程噪声 Q 虽会在数十秒内把协方差重新撑开，但那段时间轨迹点已落后真实
+        // 位移十余米（围栏进出判定与寻宝累计全程滞后）。感知到「静止→移动」跃迁时
+        // 立即把协方差放开到观测噪声量级（k≈0.5），首帧即追回半个步长。
+        if (prevSpeed in 0f..STATIONARY_SPEED && speed > STATIONARY_SPEED) {
             variance = r
         }
         prevSpeed = speed
@@ -80,7 +80,5 @@ class KalmanLocationFilter {
         /** 静止判定速度（m/s）：与 GpsManager 的静止抑制口径一致。 */
         private const val STATIONARY_SPEED = 0.5f
 
-        /** 起步判定速度（m/s）：明显高于静止阈值，避免把 GPS 噪声当成起步。 */
-        private const val MOVING_SPEED = 1.5f
     }
 }

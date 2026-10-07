@@ -374,9 +374,10 @@ class InkForegroundService : Service() {
             }
             MessageType.HEARTBEAT, MessageType.PONG -> {
                 lastPongTs = MonoClock.now()
-                if (!hostState.connected) {
-                    hostState.setConnected(true)
-                }
+                if (!hostState.connected) hostState.setConnected(true)
+                // when 整体被 runCatching 当表达式用：分支尾部的无 else if 会报
+                // "'if' must have both main and 'else' branches"，显式收 Unit
+                Unit
             }
             else -> Unit
         } }.onFailure { e ->
