@@ -61,9 +61,8 @@ class MapActivity : AppCompatActivity() {
     /** 回放统计文案；回放期间 render() 优先展示，避免被告警/等待文案覆盖。 */
     private var playbackStats: String? = null
 
-    /** 焦点设备（选中或最近上报）上一次位置，避免重复相机动画。 */
+    /** 当前相机自动聚焦的设备；切换选中/告警跳转时才重新动画。 */
     private var lastFocusKey: String? = null
-    private var lastFocusPos: Pair<Double, Double>? = null
 
     private val listener = object : ControllerState.Listener {
         override fun onStateChanged() = render()
@@ -89,12 +88,6 @@ class MapActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btn_history).setOnClickListener { showHistoryDialog() }
         findViewById<Button>(R.id.btn_export).setOnClickListener { showExportDialog() }
 
-        if (PermissionUtil.hasLocation(this)) {
-            app.startSelfLocation()
-        } else {
-            // 未授权不发采集：GpsManager.start() 会抛 SecurityException；拒绝即无自身标记，功能降级
-            PermissionUtil.request(this, REQUEST_LOCATION, *PermissionUtil.LOCATION_PERMS)
-        }
         handleIntent(intent)
         render()
     }
@@ -108,6 +101,20 @@ class MapActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         mapView.onStart()
+        // 自身定位跟随页面生命周期：旧实现只在 onCreate 启动、从不停止，
+        // 退出地图后进程级 GPS 监听仍常驻耗电
+        if (PermissionUtil.hasLocation(this)) {
+            app.startSelfLocation()
+        } else {
+            // 未授权不发采集：GpsManager.start() 会抛 SecurityException；拒绝即无自身标记，功能降级
+            PermissionUtil.request(this, REQUEST_LOCATION, *PermissionUtil.LOCATION_PERMS)
+        }
+    }
+
+    override fun onStop() {
+        app.stopSelfLocation()
+        super.onStop()
+        mapView.onStop()
     }
 
     override fun onResume() {
@@ -118,11 +125,6 @@ class MapActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         mapView.onPause()
-    }
-
-    override fun onStop() {
-        super.onStop()
-        mapView.onStop()
     }
 
     override fun onDestroy() {
@@ -171,15 +173,14 @@ class MapActivity : AppCompatActivity() {
         // 主控端自身位置（绿色）
         renderSelfLocation()
 
-        // 相机聚焦：优先选中设备，否则最近上报设备；仅位置变化时动画
+        // 相机聚焦：仅"聚焦目标变化"时动画。旧实现每次位置更新都 animateCamera，
+        // 用户在缩放/拖动查看细节时相机被反复拽回，地图根本没法看
         val focusId = state.selectedDeviceId
             ?: gpsMap.entries.maxByOrNull { it.value.time }?.key
         focusId?.let { id ->
             val gps = gpsMap[id] ?: return@let
-            val pos = gps.lat to gps.lng
-            if (id != lastFocusKey || pos != lastFocusPos) {
+            if (id != lastFocusKey) {
                 lastFocusKey = id
-                lastFocusPos = pos
                 val (gcjLat, gcjLng) = CoordinateConverter.wgs84ToGcj02(gps.lat, gps.lng)
                 tencentMap.animateCamera(
                     CameraUpdateFactory.newLatLngZoom(LatLng(gcjLat, gcjLng), 15f)
@@ -286,11 +287,21 @@ class MapActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.waiting_gps, Toast.LENGTH_SHORT).show()
             return
         }
-        val days = app.trackStore.listDays(target)
-        if (days.isEmpty()) {
-            Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
-            return
-        }
+        // listDays 是轨迹目录扫描（文件 IO）：留主线程会让点击后掉帧
+        Thread {
+            val days = app.trackStore.listDays(target)
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (days.isEmpty()) {
+                    Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
+                    return@runOnUiThread
+                }
+                showHistoryDayPicker(target, days)
+            }
+        }.start()
+    }
+
+    private fun showHistoryDayPicker(target: String, days: List<String>) {
         val dialog = AlertDialog.Builder(this)
             .setTitle("${deviceNickname(target)} · ${getString(R.string.history_track)}")
             .setItems(days.toTypedArray()) { _, which -> playDay(target, days[which]) }
@@ -373,15 +384,21 @@ class MapActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.waiting_gps, Toast.LENGTH_SHORT).show()
             return
         }
-        val days = app.trackStore.listDays(target)
-        if (days.isEmpty()) {
-            Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
-            return
-        }
-        AlertDialog.Builder(this)
-            .setTitle("${deviceNickname(target)} · ${getString(R.string.export_gpx)}")
-            .setItems(days.toTypedArray()) { _, which -> exportGpx(target, days[which]) }
-            .show()
+        // listDays 同样是文件 IO：留主线程点击后掉帧
+        Thread {
+            val days = app.trackStore.listDays(target)
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (days.isEmpty()) {
+                    Toast.makeText(this, R.string.no_track_data, Toast.LENGTH_SHORT).show()
+                    return@runOnUiThread
+                }
+                AlertDialog.Builder(this)
+                    .setTitle("${deviceNickname(target)} · ${getString(R.string.export_gpx)}")
+                    .setItems(days.toTypedArray()) { _, which -> exportGpx(target, days[which]) }
+                    .show()
+            }
+        }.start()
     }
 
     private fun exportGpx(deviceId: String, day: String) {

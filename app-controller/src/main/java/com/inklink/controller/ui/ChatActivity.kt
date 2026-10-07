@@ -28,6 +28,7 @@ import com.inklink.common.protocol.MessageType
 import com.inklink.common.utils.ImageUtil
 import com.inklink.controller.InkControllerApplication
 import com.inklink.controller.R
+import java.util.concurrent.Executors
 
 /**
  * 双端聊天页面：发送/接收文字、图片、语音消息。
@@ -43,9 +44,17 @@ class ChatActivity : AppCompatActivity() {
 
     private val listener = object : ChatStore.Listener {
         override fun onChatChanged() {
-            runOnUiThread { renderMessages() }
+            // 异步出口双检：Activity 已销毁时再进渲染会操作游离 View
+            runOnUiThread {
+                if (!isDestroyed && !isFinishing) renderMessages()
+            }
         }
     }
+
+    /** 已渲染过的消息 id：增量追加，避免每条消息都全量 removeAllViews 重建。 */
+    private val rendered = LinkedHashSet<Long>()
+    private var emptyView: TextView? = null
+    private val io = Executors.newSingleThreadExecutor()
 
     private val pickImage =
         registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
@@ -67,8 +76,9 @@ class ChatActivity : AppCompatActivity() {
         btnSend.setOnClickListener {
             val text = etInput.text.toString().trim()
             if (text.isNotEmpty()) {
-                app.sendChatText(text)
-                etInput.setText("")
+                // 未选中设备时 sendChatText 拒绝发送（旧实现会广播到全部设备）
+                if (app.sendChatText(text)) etInput.setText("")
+                else Toast.makeText(this, R.string.chat_no_device, Toast.LENGTH_SHORT).show()
             }
         }
         btnImage.setOnClickListener { pickImage.launch("image/*") }
@@ -92,6 +102,8 @@ class ChatActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         app.chatStore.removeListener(listener)
+        // 按住录音键时被切后台：不收尾泄漏 MediaRecorder 与麦克风占用
+        if (recorder.isRecording()) recorder.stop()
         VoicePlayer.stop()
     }
 
@@ -115,7 +127,9 @@ class ChatActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.chat_voice_too_long, Toast.LENGTH_SHORT).show()
             return
         }
-        app.sendChatAudio(base64)
+        if (!app.sendChatAudio(base64)) {
+            Toast.makeText(this, R.string.chat_no_device, Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun cancelRecording() {
@@ -123,29 +137,47 @@ class ChatActivity : AppCompatActivity() {
     }
 
     private fun sendImage(uri: Uri) {
-        val base64 = ImageUtil.compressToBase64(this, uri)
-        if (base64 == null) {
-            Toast.makeText(this, "图片过大，无法压缩后发送", Toast.LENGTH_SHORT).show()
-            return
+        // 压缩是位图解码+缩放重编码（几十 ms 级）：留在主线程会让点击后掉帧
+        io.execute {
+            val base64 = ImageUtil.compressToBase64(this, uri)
+            runOnUiThread {
+                if (isDestroyed || isFinishing) return@runOnUiThread
+                if (base64 == null || !app.sendChatImage(base64)) {
+                    val msg = if (base64 == null) "图片过大，无法压缩后发送" else getString(R.string.chat_no_device)
+                    Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                }
+            }
         }
-        app.sendChatImage(base64)
     }
 
     private fun renderMessages() {
-        val messages = app.chatStore.all()
-        chatList.removeAllViews()
-        if (messages.isEmpty()) {
+        // 时间线按当前选中设备过滤：多受控设备下不再混入其他孩子的会话
+        val peer = app.transportManager.defaultTargetDeviceId
+        val messages = app.chatStore.all(peer)
+        val mine = app.deviceId
+        val hint = when {
+            peer == null -> getString(R.string.chat_no_device)
+            messages.isEmpty() -> getString(R.string.chat_empty)
+            else -> null
+        }
+        if (hint != null) {
+            chatList.removeAllViews()
+            rendered.clear()
             val empty = TextView(this).apply {
-                text = getString(R.string.chat_empty)
+                text = hint
                 gravity = Gravity.CENTER
                 setPadding(0, dp(24), 0, 0)
             }
+            emptyView = empty
             chatList.addView(empty)
             return
         }
-        val mine = app.deviceId
+        emptyView?.let { chatList.removeView(it) }
+        emptyView = null
         for (msg in messages) {
-            chatList.addView(buildBubble(msg, msg.fromDeviceId == mine))
+            if (rendered.add(msg.id)) {
+                chatList.addView(buildBubble(msg, msg.fromDeviceId == mine))
+            }
         }
         scrollView.post { scrollView.fullScroll(View.FOCUS_DOWN) }
     }
@@ -177,17 +209,21 @@ class ChatActivity : AppCompatActivity() {
                 container.addView(tv)
             }
             MessageType.CHAT_IMAGE -> {
-                val bitmap = ImageUtil.decodeBase64(msg.payload)
-                if (bitmap != null) {
-                    val iv = ImageView(this).apply {
-                        setImageBitmap(bitmap)
-                        scaleType = ImageView.ScaleType.CENTER_CROP
-                        setBackgroundResource(bubbleBg)
+                // 占位先入列，位图解码放后台：主线程同步 decode 大图会卡渲染
+                val iv = ImageView(this).apply {
+                    scaleType = ImageView.ScaleType.CENTER_CROP
+                    setBackgroundResource(bubbleBg)
+                }
+                val lp = LinearLayout.LayoutParams(dp(160), dp(160))
+                lp.setMargins(dp(4), dp(4), dp(4), dp(4))
+                iv.layoutParams = lp
+                container.addView(iv)
+                io.execute {
+                    val bitmap = ImageUtil.decodeBase64(msg.payload)
+                    runOnUiThread {
+                        if (isDestroyed || isFinishing) return@runOnUiThread
+                        if (bitmap != null) iv.setImageBitmap(bitmap)
                     }
-                    val lp = LinearLayout.LayoutParams(dp(160), dp(160))
-                    lp.setMargins(dp(4), dp(4), dp(4), dp(4))
-                    iv.layoutParams = lp
-                    container.addView(iv)
                 }
             }
             MessageType.CHAT_AUDIO -> {

@@ -41,6 +41,8 @@ import java.util.Locale
  */
 class ControllerActivity : AppCompatActivity() {
 
+    private val imageIo = java.util.concurrent.Executors.newSingleThreadExecutor()
+
     private lateinit var app: InkControllerApplication
     private lateinit var state: ControllerState
 
@@ -177,13 +179,36 @@ class ControllerActivity : AppCompatActivity() {
             .setSingleChoiceItems(items, selected) { _, which -> selected = which }
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 when (selected) {
-                    0 -> {
-                        Toast.makeText(this, "已切为局域网模式", Toast.LENGTH_SHORT).show()
-                    }
+                    // 旧实现只弹「已切为局域网模式」的 toast，从未调用 switchMode，
+                    // 用户以为切了，实际仍停留在旧模式（假开关）
+                    0 -> showLocalConfig()
                     1 -> showRelayConfig()
                     2 -> showAblyConfig()
                     3 -> showPairingConfig()
                 }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** 局域网模式：输入受控端 IP 后真正切换（必填项，不给默认值误导）。 */
+    private fun showLocalConfig() {
+        val ipEdit = EditText(this).apply {
+            hint = "受控端局域网 IP（如 192.168.1.23）"
+            inputType = android.text.InputType.TYPE_CLASS_TEXT
+        }
+        AlertDialog.Builder(this)
+            .setTitle("局域网模式")
+            .setMessage("与受控端在同一 Wi-Fi 下时使用，需填写受控端设备的局域网 IP。")
+            .setView(ipEdit)
+            .setPositiveButton(android.R.string.ok) { _, _ ->
+                val host = ipEdit.text.toString().trim()
+                if (host.isEmpty()) {
+                    Toast.makeText(this, "未填写受控端 IP，未切换", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                app.connectLocal(host, LocalWsTransport.DEFAULT_PORT)
+                Toast.makeText(this, "已切换局域网模式，正在连接 $host", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
@@ -284,15 +309,24 @@ class ControllerActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == REQUEST_IMAGE && resultCode == Activity.RESULT_OK) {
             val uri = data?.data ?: return
-            val base64 = ImageUtil.compressToBase64(this, uri)
-            if (base64 == null) {
-                Toast.makeText(this, "图片过大，无法压缩后发送", Toast.LENGTH_SHORT).show()
-                return
+            // 压缩是重 IO：留主线程会让选图后整页卡住直到编解码完成
+            imageIo.execute {
+                val base64 = ImageUtil.compressToBase64(this, uri)
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+                    if (base64 == null) {
+                        Toast.makeText(this, "图片过大，无法压缩后发送", Toast.LENGTH_SHORT).show()
+                        return@runOnUiThread
+                    }
+                    app.transportManager.sendMessage(
+                        InkMessage.text(
+                            MessageType.IMAGE, base64,
+                            from = app.deviceId, target = state.selectedDeviceId
+                        )
+                    )
+                    Toast.makeText(this, "投屏图片已发送", Toast.LENGTH_SHORT).show()
+                }
             }
-            app.transportManager.sendMessage(
-                InkMessage.text(MessageType.IMAGE, base64, from = app.deviceId, target = state.selectedDeviceId)
-            )
-            Toast.makeText(this, "投屏图片已发送", Toast.LENGTH_SHORT).show()
         }
     }
 

@@ -210,6 +210,12 @@ class InkControllerApplication : Application() {
         selfGpsManager?.start()
     }
 
+    /** 停止自身定位采集（地图页销毁时调用：否则进程级 GPS 监听一直存活耗电）。 */
+    fun stopSelfLocation() {
+        selfGpsManager?.stop()
+        selfGpsManager = null
+    }
+
     /** 广播或定向请求受控端立即上报一次位置。 */
     fun requestGps(targetDeviceId: String? = controllerState.selectedDeviceId) {
         transportManager.sendMessage(InkMessage.control(MessageType.REQUEST_GPS, from = deviceId, target = targetDeviceId))
@@ -298,19 +304,38 @@ class InkControllerApplication : Application() {
         return msg.msgId
     }
 
-    fun sendChatText(text: String) {
-        transportManager.sendMessage(InkMessage.text(MessageType.CHAT_TEXT, text, from = deviceId))
-        chatStore.add(ChatMessage(chatStore.nextId(), MessageType.CHAT_TEXT, text, deviceId, System.currentTimeMillis()))
+    /**
+     * 发文字聊天。未选中目标设备时拒绝发送并返回 false：旧实现 target 为 null，
+     * 消息广播到全部受控设备，多孩场景下每个孩子的聊天页都会收到同一条消息。
+     */
+    fun sendChatText(text: String): Boolean {
+        val peer = transportManager.defaultTargetDeviceId ?: return false
+        transportManager.sendMessage(InkMessage.text(MessageType.CHAT_TEXT, text, from = deviceId, target = peer))
+        chatStore.add(
+            ChatMessage(chatStore.nextId(), MessageType.CHAT_TEXT, text, deviceId, System.currentTimeMillis()),
+            peer
+        )
+        return true
     }
 
-    fun sendChatImage(base64: String) {
-        transportManager.sendMessage(InkMessage.text(MessageType.CHAT_IMAGE, base64, from = deviceId))
-        chatStore.add(ChatMessage(chatStore.nextId(), MessageType.CHAT_IMAGE, base64, deviceId, System.currentTimeMillis()))
+    fun sendChatImage(base64: String): Boolean {
+        val peer = transportManager.defaultTargetDeviceId ?: return false
+        transportManager.sendMessage(InkMessage.text(MessageType.CHAT_IMAGE, base64, from = deviceId, target = peer))
+        chatStore.add(
+            ChatMessage(chatStore.nextId(), MessageType.CHAT_IMAGE, base64, deviceId, System.currentTimeMillis()),
+            peer
+        )
+        return true
     }
 
-    fun sendChatAudio(base64: String) {
-        transportManager.sendMessage(InkMessage.text(MessageType.CHAT_AUDIO, base64, from = deviceId))
-        chatStore.add(ChatMessage(chatStore.nextId(), MessageType.CHAT_AUDIO, base64, deviceId, System.currentTimeMillis()))
+    fun sendChatAudio(base64: String): Boolean {
+        val peer = transportManager.defaultTargetDeviceId ?: return false
+        transportManager.sendMessage(InkMessage.text(MessageType.CHAT_AUDIO, base64, from = deviceId, target = peer))
+        chatStore.add(
+            ChatMessage(chatStore.nextId(), MessageType.CHAT_AUDIO, base64, deviceId, System.currentTimeMillis()),
+            peer
+        )
+        return true
     }
 
     /** 选中目标设备，后续定向消息/围栏下发到该设备。 */
@@ -434,11 +459,13 @@ class InkControllerApplication : Application() {
             MessageType.CHAT_TEXT, MessageType.CHAT_IMAGE, MessageType.CHAT_AUDIO ->
                 message.messageType?.let { type ->
                     message.payload?.let { payload ->
+                        // peer=发送方设备号：聊天页按当前选中设备过滤时间线
                         chatStore.add(
                             ChatMessage(
                                 chatStore.nextId(), type, payload,
                                 message.fromDeviceId, System.currentTimeMillis()
-                            )
+                            ),
+                            message.fromDeviceId
                         )
                     }
                 }

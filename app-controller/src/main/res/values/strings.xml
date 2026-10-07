@@ -111,6 +111,7 @@
     <string name="chat_voice_msg">语音消息</string>
     <string name="chat_voice_too_long">语音太长，请缩短后重试</string>
     <string name="chat_empty">暂无消息，开始聊天吧</string>
+    <string name="chat_no_device">请先在设备列表选择设备</string>
     <string name="chat_no_permission">无录音权限</string>
     <string name="btn_siren_ring">🚨 强制响铃</string>
     <string name="btn_siren_stop">⏹ 停止响铃</string>

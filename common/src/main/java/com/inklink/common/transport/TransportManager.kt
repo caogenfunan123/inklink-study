@@ -2,6 +2,7 @@ package com.inklink.common.transport
 
 import com.inklink.common.protocol.InkMessage
 import com.inklink.common.protocol.MessageCodec
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * 传输模式管理器。
@@ -27,6 +28,13 @@ class TransportManager(
     private var currentMode: TransportMode? = null
     var listener: TransportListener? = null
         private set
+
+    /**
+     * 页面级多播监听器。旧实现是页面 setListener 包裹全局 listener、退出时还原：
+     * 两个页面同时注册时后一个页面退出会把前一个的包裹一起还原掉，链路说断就断。
+     * 多播后页面只 add/remove 自己的一份，互不影响。
+     */
+    private val pageListeners = CopyOnWriteArrayList<TransportListener>()
 
     private val pending = ArrayDeque<InkMessage>()
 
@@ -62,7 +70,8 @@ class TransportManager(
             current?.heartbeatIntervalProvider = heartbeatIntervalProvider
             return
         }
-        current?.disconnect(clearPending = false)
+        // 切模式只断旧连接：pending 由本类持有，跨模式保留积压待发消息
+        current?.disconnect()
         current = null
         currentMode = null
 
@@ -88,15 +97,18 @@ class TransportManager(
         next.setListener(object : TransportListener {
             override fun onTextMessage(message: InkMessage) {
                 listener?.onTextMessage(message)
+                pageListeners.forEach { runCatching { it.onTextMessage(message) } }
             }
 
             override fun onAudioMessage(frame: ByteArray) {
                 listener?.onAudioMessage(frame)
+                pageListeners.forEach { runCatching { it.onAudioMessage(frame) } }
             }
 
             override fun onConnectionChanged(connected: Boolean) {
                 if (connected) flushPending()
                 listener?.onConnectionChanged(connected)
+                pageListeners.forEach { runCatching { it.onConnectionChanged(connected) } }
             }
         })
         current = next
@@ -109,9 +121,10 @@ class TransportManager(
     /**
      * 主动断开。
      *
-     * @param clearPending 是否丢弃积压消息。用户显式「断开」应清空——否则今晨
-     *   未送达的聊天/围栏指令会在数小时后切模式重连时原样重放，家长以为孩子
-     *   当时已收到；[switchMode] 内部的断开必须传 false，保证切换期间不丢。
+     * @param clearPending 是否丢弃积压消息。用户显式「断开」应清空（默认 true）——
+     *   否则今晨未送达的聊天/围栏指令会在数小时后切模式重连时原样重放，家长以为
+     *   孩子当时已收到；[switchMode] 切换期间不清（内部只断旧连接，pending 由
+     *   本类持有，自动跨模式保留）。
      */
     fun disconnect(clearPending: Boolean = true) {
         current?.disconnect()
@@ -124,6 +137,15 @@ class TransportManager(
 
     fun setListener(listener: TransportListener?) {
         this.listener = listener
+    }
+
+    /** 注册页面级监听（onDestroy 里 [removeListener] 成对移除）。 */
+    fun addListener(l: TransportListener) {
+        pageListeners.addIfAbsent(l)
+    }
+
+    fun removeListener(l: TransportListener) {
+        pageListeners.remove(l)
     }
 
     fun isConnected(): Boolean = current?.isConnected() == true

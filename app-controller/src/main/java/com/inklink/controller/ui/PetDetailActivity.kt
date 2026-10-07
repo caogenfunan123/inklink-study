@@ -168,7 +168,6 @@ class PetDetailActivity : AppCompatActivity() {
         override fun onConnectionChanged(connected: Boolean) = Unit
     }
 
-    private var prevListener: com.inklink.common.transport.TransportListener? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -232,19 +231,9 @@ class PetDetailActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnSndWarn).setOnClickListener { sendSystemSound("alert_warn", "⚠️ 告警提示", "") }
         findViewById<Button>(R.id.btnSndAck).setOnClickListener { sendSystemSound("sound_ack", "✅ 确认反馈", "") }
 
-        prevListener = app.transportManager.listener
-        app.transportManager.setListener(object : com.inklink.common.transport.TransportListener {
-            override fun onTextMessage(message: InkMessage) {
-                prevListener?.onTextMessage(message)
-                transportListener.onTextMessage(message)
-            }
-            override fun onAudioMessage(frame: ByteArray) {
-                prevListener?.onAudioMessage(frame)
-            }
-            override fun onConnectionChanged(connected: Boolean) {
-                prevListener?.onConnectionChanged(connected)
-            }
-        })
+        // 多播注册：销毁时只移除自己那份。旧实现是"包裹全局 listener 再还原"，
+        // 与其他页面同时注册会互相还原，链路莫名断开
+        app.transportManager.addListener(transportListener)
 
         // 初始向受控端拉取全量背包与状态
         app.transportManager.sendMessage(
@@ -571,7 +560,6 @@ class PetDetailActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // 恢复 Application 全局监听器，避免清空后 GPS/告警/聊天路由全部失效
-        app.transportManager.setListener(prevListener)
+        app.transportManager.removeListener(transportListener)
     }
 }

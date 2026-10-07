@@ -74,19 +74,29 @@ class InkHostApplication : Application() {
     val pairingKeyIsDefault: Boolean
         get() = pairingKey == DEFAULT_PAIRING_KEY
 
+    // 受控端一般不设置默认目标（1:1 会话），peer 取当前 defaultTargetDeviceId（通常为 null）
     fun sendChatText(text: String) {
         transportManager.sendMessage(InkMessage.text(MessageType.CHAT_TEXT, text, from = deviceId))
-        chatStore.add(ChatMessage(chatStore.nextId(), MessageType.CHAT_TEXT, text, deviceId, System.currentTimeMillis()))
+        chatStore.add(
+            ChatMessage(chatStore.nextId(), MessageType.CHAT_TEXT, text, deviceId, System.currentTimeMillis()),
+            transportManager.defaultTargetDeviceId
+        )
     }
 
     fun sendChatImage(base64: String) {
         transportManager.sendMessage(InkMessage.text(MessageType.CHAT_IMAGE, base64, from = deviceId))
-        chatStore.add(ChatMessage(chatStore.nextId(), MessageType.CHAT_IMAGE, base64, deviceId, System.currentTimeMillis()))
+        chatStore.add(
+            ChatMessage(chatStore.nextId(), MessageType.CHAT_IMAGE, base64, deviceId, System.currentTimeMillis()),
+            transportManager.defaultTargetDeviceId
+        )
     }
 
     fun sendChatAudio(base64: String) {
         transportManager.sendMessage(InkMessage.text(MessageType.CHAT_AUDIO, base64, from = deviceId))
-        chatStore.add(ChatMessage(chatStore.nextId(), MessageType.CHAT_AUDIO, base64, deviceId, System.currentTimeMillis()))
+        chatStore.add(
+            ChatMessage(chatStore.nextId(), MessageType.CHAT_AUDIO, base64, deviceId, System.currentTimeMillis()),
+            transportManager.defaultTargetDeviceId
+        )
     }
 
     override fun onCreate() {

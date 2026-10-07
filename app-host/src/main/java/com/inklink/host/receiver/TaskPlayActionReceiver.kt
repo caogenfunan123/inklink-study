@@ -35,9 +35,9 @@ class TaskPlayActionReceiver : BroadcastReceiver() {
             TaskQueueManager(context).markPlayed(taskId)
 
             // 回执 PLAYED 状态（清单：任务接收与点击播放双状态回执）
-            runCatching {
+            if (app != null) runCatching {
                 val ack = RemoteTaskAckPayload(taskId = taskId, status = "PLAYED")
-                app?.transportManager?.sendMessage(
+                app.transportManager.sendMessage(
                     InkMessage(
                         type = MessageType.REMOTE_TASK_ACK.code,
                         fromDeviceId = app.deviceId,

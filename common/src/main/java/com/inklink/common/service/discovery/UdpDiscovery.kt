@@ -73,6 +73,7 @@ object UdpDiscovery {
                     val wait = (deadline - MonoClock.now()).toInt()
                     if (wait <= 0) break
                     sock.soTimeout = wait
+                    val packet = DatagramPacket(buf, buf.size)
                     runCatching {
                         sock.receive(packet)
                         val text = String(packet.data, 0, packet.length, Charsets.UTF_8)

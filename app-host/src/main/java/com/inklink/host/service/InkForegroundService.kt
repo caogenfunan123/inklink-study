@@ -361,11 +361,13 @@ class InkForegroundService : Service() {
                 val app = application as InkHostApplication
                 message.messageType?.let { type ->
                     message.payload?.let { payload ->
+                        // peer=发送方设备号：多主控场景下按对端过滤时间线
                         app.chatStore.add(
                             ChatMessage(
                                 app.chatStore.nextId(), type, payload,
                                 message.fromDeviceId, System.currentTimeMillis()
-                            )
+                            ),
+                            message.fromDeviceId
                         )
                     }
                 }
