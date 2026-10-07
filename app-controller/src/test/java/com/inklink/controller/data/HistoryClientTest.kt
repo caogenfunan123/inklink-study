@@ -38,13 +38,20 @@ class HistoryClientTest {
 
     private val base = 1_700_000_000_000L
 
+    /**
+     * 注入时钟：Robolectric 的 SystemClock 默认不走动，墙钟语义下停滞检测
+     * 永远看不到时间流逝；用可推进的假时钟让检测确定性触发。
+     */
+    @Volatile
+    private var now = 1_000_000L
+
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         File(context.filesDir, "tracks").deleteRecursively()
         store = TrackStore(context)
         state = ControllerState()
-        client = HistoryClient(store, state, stallTimeoutMs = 200)
+        client = HistoryClient(store, state, stallTimeoutMs = 200) { now }
         requests.clear()
         client.bindSenders(
             requestSender = { deviceId, reqId, startTs, endTs, acked ->
@@ -173,7 +180,8 @@ class HistoryClientTest {
         client.onChunk("dev-1", chunk(0, 3, listOf(pointJson(base, 31.0))))
         client.flushForTest()
 
-        // 等待停滞检测（stallTimeoutMs=200，周期 100ms）
+        // 注入时钟前进 1s（> stallTimeoutMs=200），停滞检测实时触发
+        now += 1_000L
         Thread.sleep(700)
         client.flushForTest()
 
