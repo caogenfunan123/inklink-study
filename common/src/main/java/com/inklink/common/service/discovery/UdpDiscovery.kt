@@ -1,6 +1,7 @@
 package com.inklink.common.service.discovery
 
 import com.google.gson.Gson
+import com.inklink.common.utils.MonoClock
 import java.net.DatagramPacket
 import java.net.DatagramSocket
 import java.net.InetAddress
@@ -65,10 +66,11 @@ object UdpDiscovery {
                 val broadcastAddr = InetAddress.getByName("255.255.255.255")
                 sock.send(DatagramPacket(request, request.size, broadcastAddr, DISCOVERY_PORT))
 
-                val deadline = System.currentTimeMillis() + timeoutMs
-                while (System.currentTimeMillis() < deadline) {
-                    val packet = DatagramPacket(buf, buf.size)
-                    val wait = (deadline - System.currentTimeMillis()).toInt()
+                // 扫描窗口用单调钟：socket soTimeout 与墙钟混用，墙钟回拨会让
+                // 等待值变负、扫描线程行为不可预期
+                val deadline = MonoClock.now() + timeoutMs
+                while (true) {
+                    val wait = (deadline - MonoClock.now()).toInt()
                     if (wait <= 0) break
                     sock.soTimeout = wait
                     runCatching {

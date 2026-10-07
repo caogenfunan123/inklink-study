@@ -18,6 +18,9 @@ class TransportManager(
 
     companion object {
         private const val TAG = "TransportManager"
+
+        /** pending 上限：长时间无网后重连一次性倾倒积压会击穿 Ably 限速/本地背压，FIFO 淘汰。 */
+        private const val MAX_PENDING = 200
     }
 
     private var current: IMessageTransport? = null
@@ -48,7 +51,10 @@ class TransportManager(
             TransportMode.RELAY -> (current as? ServerRelayTransport)?.serverUrl == relayServerUrl
             TransportMode.ABLY ->
                 current is AblyRelayTransport &&
-                (current as? AblyRelayTransport)?.channelName == ablyChannel
+                (current as? AblyRelayTransport)?.channelName == ablyChannel &&
+                // Key 变化（如用户在弹窗补填初始为空的 Key）必须重建实例，
+                // 否则旧实例 connect() 直接 return，永远连不上
+                (current as? AblyRelayTransport)?.ablyKey == ablyKey
         }
         if (sameTarget) {
             // 复用已有连接：同步刷新心跳间隔提供器（亮/灭屏切换后 provider 引用可能已变，
@@ -56,7 +62,7 @@ class TransportManager(
             current?.heartbeatIntervalProvider = heartbeatIntervalProvider
             return
         }
-        current?.disconnect()
+        current?.disconnect(clearPending = false)
         current = null
         currentMode = null
 
@@ -100,10 +106,20 @@ class TransportManager(
 
     fun connect() = current?.connect()
 
-    fun disconnect() {
+    /**
+     * 主动断开。
+     *
+     * @param clearPending 是否丢弃积压消息。用户显式「断开」应清空——否则今晨
+     *   未送达的聊天/围栏指令会在数小时后切模式重连时原样重放，家长以为孩子
+     *   当时已收到；[switchMode] 内部的断开必须传 false，保证切换期间不丢。
+     */
+    fun disconnect(clearPending: Boolean = true) {
         current?.disconnect()
         current = null
         currentMode = null
+        if (clearPending) {
+            synchronized(pending) { pending.clear() }
+        }
     }
 
     fun setListener(listener: TransportListener?) {
@@ -130,9 +146,23 @@ class TransportManager(
             return
         }
         if (current?.isConnected() == true) {
-            current?.sendMessage(framed)
+            // isConnected() 与底层发送之间存在断窗：连接可能在判定后瞬间断开，
+            // 直接发送会静默丢失（与「pending 保证不丢」的类契约相悖）。
+            // 发送异常一律回落到 pending，而不是把消息丢出进程。
+            val sent = runCatching { current?.sendMessage(framed) }
+            if (sent.isFailure) enqueuePending(framed)
         } else {
-            synchronized(pending) { pending.addLast(framed) }
+            enqueuePending(framed)
+        }
+    }
+
+    private fun enqueuePending(message: InkMessage) {
+        synchronized(pending) {
+            if (pending.size >= MAX_PENDING) {
+                val dropped = pending.removeFirst()
+                android.util.Log.w(TAG, "pending 已满，丢弃最旧消息: type=${dropped.messageType}")
+            }
+            pending.addLast(message)
         }
     }
 
@@ -144,9 +174,16 @@ class TransportManager(
     }
 
     private fun flushPending() {
-        synchronized(pending) {
-            while (pending.isNotEmpty()) {
-                current?.sendMessage(pending.removeFirst())
+        // 锁内只做快照，锁外发送：持锁调用底层 send 会把阻塞传播给所有入队方
+        val snapshot = synchronized(pending) {
+            if (pending.isEmpty()) return
+            pending.toList().also { pending.clear() }
+        }
+        snapshot.forEach { msg ->
+            if (current?.isConnected() == true) {
+                runCatching { current?.sendMessage(msg) }
+            } else {
+                enqueuePending(msg)
             }
         }
     }

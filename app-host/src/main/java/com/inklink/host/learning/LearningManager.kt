@@ -398,50 +398,57 @@ class LearningManager private constructor(context: Context) {
         }
         val capped = coinsGranted < coinsBase
 
-        // 宠物入账(唯一入口,联动升级/事件日志/礼花)
-        if (coinsGranted > 0 || exp > 0) {
-            PetStateManager(appContext).addReward(coinsGranted, exp)
-        }
-
-        // 进度与复习调度:只结算本关出现过的知识点
-        val now = System.currentTimeMillis()
-        var mastered = 0
-        val existing = dao.allProgress(result.module).associateBy { it.itemId }
-        fun upsertItem(itemId: String, wasCorrect: Boolean) {
-            val row = existing[itemId] ?: LearnProgressRow(
-                module = result.module, itemId = itemId, level = result.level
-            )
-            if (wasCorrect) {
-                row.correctCount++
-                if (row.reviewStage < REVIEW_INTERVAL_DAYS.size) row.reviewStage++
-                if (row.reviewStage >= REVIEW_INTERVAL_DAYS.size) {
-                    row.status = "MASTERED"
-                    mastered++
-                    row.nextReviewTs = 0
-                } else {
-                    row.nextReviewTs = now + REVIEW_INTERVAL_DAYS[row.reviewStage] * DAY_MS
-                }
-            } else {
-                row.wrongCount++
-                row.reviewStage = 0
-                row.status = "LEARNING"
-                row.nextReviewTs = now + DAY_MS
+        // 奖励入账 + 学习记录 + 日统计走同一事务：中途进程被杀时要么全部生效要么
+        // 全部回滚（此前是三次独立写，杀在中间会"发了币但没记进度"）
+        PetDatabase.get(appContext).runInTransaction {
+            // 宠物入账(唯一入口,联动升级/事件日志/礼花)
+            if (coinsGranted > 0 || exp > 0) {
+                PetStateManager(appContext).addReward(coinsGranted, exp)
             }
-            row.lastTs = now
-            dao.upsertProgress(row)
-        }
-        val wrong = result.wrongChars.toSet()
-        result.chars.forEach { itemId -> upsertItem(itemId, wasCorrect = itemId !in wrong) }
-        result.wrongChars.forEach { dao.insertWrong(WrongBookRow(module = result.module, itemId = it)) }
 
-        // 日统计
-        val daily = dao.dailyRow(today, result.module) ?: DailyStatsRow(date = today, module = result.module)
-        daily.minutes += result.durationSec / 60
-        daily.itemsDone += result.total
-        daily.correctSum += result.correct
-        daily.coinsEarned += coinsGranted
-        daily.expEarned += exp
-        dao.upsertDaily(daily)
+            // 进度与复习调度:只结算本关出现过的知识点（同一事务内）
+            val now = System.currentTimeMillis()
+            var mastered = 0
+            val existing = dao.allProgress(result.module).associateBy { it.itemId }
+            fun upsertItem(itemId: String, wasCorrect: Boolean) {
+                val row = existing[itemId] ?: LearnProgressRow(
+                    module = result.module, itemId = itemId, level = result.level
+                )
+                if (wasCorrect) {
+                    row.correctCount++
+                    if (row.reviewStage < REVIEW_INTERVAL_DAYS.size) row.reviewStage++
+                    if (row.reviewStage >= REVIEW_INTERVAL_DAYS.size) {
+                        // 已掌握的知识点重复上课只刷新统计：无脑 mastered++ 会让掌握度
+                        // 展示虚高，且 nextReviewTs=0 导致该条永不再复习
+                        val alreadyMastered = row.status == "MASTERED"
+                        row.status = "MASTERED"
+                        if (!alreadyMastered) mastered++
+                        row.nextReviewTs = 0
+                    } else {
+                        row.nextReviewTs = now + REVIEW_INTERVAL_DAYS[row.reviewStage] * DAY_MS
+                    }
+                } else {
+                    row.wrongCount++
+                    row.reviewStage = 0
+                    row.status = "LEARNING"
+                    row.nextReviewTs = now + DAY_MS
+                }
+                row.lastTs = now
+                dao.upsertProgress(row)
+            }
+            val wrong = result.wrongChars.toSet()
+            result.chars.forEach { itemId -> upsertItem(itemId, wasCorrect = itemId !in wrong) }
+            result.wrongChars.forEach { dao.insertWrong(WrongBookRow(module = result.module, itemId = it)) }
+
+            // 日统计
+            val daily = dao.dailyRow(today, result.module) ?: DailyStatsRow(date = today, module = result.module)
+            daily.minutes += result.durationSec / 60
+            daily.itemsDone += result.total
+            daily.correctSum += result.correct
+            daily.coinsEarned += coinsGranted
+            daily.expEarned += exp
+            dao.upsertDaily(daily)
+        }
 
         reportProgress(result, rate)
         return RewardResult(coinsGranted, exp, capped, mastered)

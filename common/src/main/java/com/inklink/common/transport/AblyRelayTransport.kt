@@ -33,7 +33,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * 语音二进制帧本期搁置，Ably 只承载文本 JSON 消息。
  */
 class AblyRelayTransport(
-    private val ablyKey: String,
+    /** 对外暴露：[TransportManager] 判定 sameTarget 时需连同 Key 一起比较，
+     *  否则用户在「Ably 密钥」弹窗补填/修改 Key 后，旧实例（可能是空 Key 的
+     *  永不连接实例）会被误判为可复用，连接永久死亡直到重启。 */
+    val ablyKey: String,
     private val deviceId: String,
     val channelName: String = DEFAULT_CHANNEL
 ) : IMessageTransport {

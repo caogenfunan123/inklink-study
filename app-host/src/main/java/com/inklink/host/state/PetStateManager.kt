@@ -6,6 +6,7 @@ import com.inklink.common.protocol.payload.Memorial
 import com.inklink.common.protocol.payload.Moment
 import com.inklink.common.protocol.payload.PetBag
 import com.inklink.common.protocol.payload.PetItem
+import com.inklink.common.utils.MonoClock
 import com.inklink.host.data.EventLogEntry
 import com.inklink.host.data.PetBagRow
 import com.inklink.host.data.PetDatabase
@@ -55,8 +56,13 @@ class PetStateManager(context: Context) {
 
         @Volatile
         private var cachedBag: PetBag? = null
+
+        /** 单调钟域的落盘时刻（与墙钟无关，时间回拨不会让节流失效）。 */
         private var lastPersistTs = 0L
         private var pendingDirty = false
+
+        /** 随机事件冷却的单调钟域读数；0 = 本进程尚未初始化（见 rollRandomEvent 折算）。 */
+        private var lastEventMonoTs = 0L
     }
 
     /** 全局共享的背包状态。 */
@@ -73,6 +79,7 @@ class PetStateManager(context: Context) {
             cachedBag = null
             pendingDirty = false
             lastPersistTs = 0L
+            lastEventMonoTs = 0L
         }
     }
 
@@ -705,11 +712,23 @@ class PetStateManager(context: Context) {
         synchronized(lock) {
             val pet = getActivePet()
             if (!pet.isAlive || pet.isSleeping || pet.lifeStage == "EGG") return null
-            val now = System.currentTimeMillis()
-            if (now - pet.lastEventTs < EVENT_COOLDOWN_MS) return null
+            // 冷却判据走单调钟：进程内墙钟回拨会让 now - last 恒负、冷却永不到期
+            // （随机事件永久不触发）。跨重启冷却靠启动时把持久化墙钟折算成等价单调读数延续，
+            // 折算钳制在窗口内，时钟异常最坏情况是放行一次，绝不会静默失效。
+            val now = MonoClock.now()
+            if (lastEventMonoTs == 0L) {
+                lastEventMonoTs = if (pet.lastEventTs > 0) {
+                    now - (System.currentTimeMillis() - pet.lastEventTs)
+                        .coerceIn(0L, EVENT_COOLDOWN_MS)
+                } else {
+                    now - EVENT_COOLDOWN_MS // 从未触发，直接放行
+                }
+            }
+            if (now - lastEventMonoTs < EVENT_COOLDOWN_MS) return null
             // 只在数值尚可时触发，低数值时不再雪上加霜
             if (pet.hunger < 25 || pet.clean < 25) return null
-            pet.lastEventTs = now
+            pet.lastEventTs = System.currentTimeMillis() // 仅展示/排障用，不参与判据
+            lastEventMonoTs = now
             val good = Random.nextFloat() < 0.55f
             val msg = if (good) {
                 if (Random.nextBoolean()) {
@@ -952,7 +971,7 @@ class PetStateManager(context: Context) {
             val bag = cachedBag ?: return
             // 展示兼容：pillCount 恒等于治疗药剂库存（主控端旧版展示零改动）
             bag.pillCount = bag.itemStock["potion_heal"] ?: 0
-            val now = System.currentTimeMillis()
+            val now = MonoClock.now()
             if (force || now - lastPersistTs >= PERSIST_THROTTLE_MS) {
                 writeLocked(bag)
             } else {
@@ -972,7 +991,7 @@ class PetStateManager(context: Context) {
     private fun writeLocked(bag: PetBag) {
         runCatching {
             dao.upsertBag(PetBagRow(bagJson = gson.toJson(bag)))
-            lastPersistTs = System.currentTimeMillis()
+            lastPersistTs = MonoClock.now()
             pendingDirty = false
         }
     }

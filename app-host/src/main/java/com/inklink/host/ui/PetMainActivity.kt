@@ -19,6 +19,7 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.TextInputEditText
 import com.inklink.common.protocol.payload.PetItem
+import com.inklink.common.utils.MonoClock
 import com.inklink.host.R
 import com.inklink.host.data.EventLogEntry
 import com.inklink.host.pet.PetAiEngine
@@ -100,6 +101,17 @@ class PetMainActivity : AppCompatActivity() {
     // SOS 发送冷却（10s 防连点刷屏）
     private var lastSosSentAt = 0L
 
+    /**
+     * TTS 引擎探测降级监听。必须持有为字段并在 onDestroy 摘除：
+     * 早期用匿名 lambda 注册，lambda 捕获 Activity，而 PetTtsGate 是进程单例——
+     * listeners 随每次重建线性增长，强引用已销毁 Activity，且界面关了还播降级提示音。
+     */
+    private val probeListener = { probe: com.inklink.host.audio.PetTtsGate.Probe ->
+        if (probe == com.inklink.host.audio.PetTtsGate.Probe.UNAVAILABLE) {
+            // TTS 引擎全部不可用：降级为气泡文字 + 系统提示音，保证"点击有反馈"
+            soundEffectManager.playFeedSound()
+        }
+    }
     // 抚摸（长按）连击节流
     private var lastAffectionTs = 0L
     // 烦躁判定：2s 窗口内点击 >=8 次（design 阈值）
@@ -132,12 +144,7 @@ class PetMainActivity : AppCompatActivity() {
         petStateManager = PetStateManager(this)
         pinSecurityManager = PinSecurityManager(this)
         soundEffectManager = SoundEffectManager(this)
-        localTtsManager.addProbeListener { probe ->
-            if (probe == com.inklink.host.audio.PetTtsGate.Probe.UNAVAILABLE) {
-                // TTS 引擎全部不可用：降级为气泡文字 + 系统提示音，保证"点击有反馈"
-                soundEffectManager.playFeedSound()
-            }
-        }
+        localTtsManager.addProbeListener(probeListener)
         petMiniGameManager = com.inklink.host.game.PetMiniGameManager(this)
         taskQueueManager = com.inklink.host.task.TaskQueueManager(this)
 
@@ -304,7 +311,8 @@ class PetMainActivity : AppCompatActivity() {
     private fun handleSpriteTap(x: Float) {
         HapticUtil.tap(petSpriteView)
         petSpriteView.onTapAt(petSpriteView.normalizedXof(x))
-        val now = System.currentTimeMillis()
+        // 单调钟：墙钟回拨会让 now - first 恒负、窗口永不清空，攒够 8 次后"烦躁"误判停不下来
+        val now = MonoClock.now()
         tapWindow.addLast(now)
         // design 9.x：连点判定窗口 2s
         while (tapWindow.size > 8 || (tapWindow.isNotEmpty() && now - tapWindow.first() > 2_000L)) {
@@ -603,9 +611,9 @@ class PetMainActivity : AppCompatActivity() {
         }
     }
 
-    /** SOS 二次确认防误触；发送后 10s 冷却，防止连点刷屏。 */
+    /** SOS 二次确认防误触；发送后 10s 冷却，防止连点刷屏（单调钟，防系统时间回拨把紧急求助永久冷却）。 */
     private fun showSosConfirmDialog() {
-        if (System.currentTimeMillis() - lastSosSentAt < 10_000L) {
+        if (MonoClock.now() - lastSosSentAt < 10_000L) {
             PixelToast.show(rootContainer, "刚刚已经呼叫过啦，请等爸爸妈妈回应")
             return
         }
@@ -626,7 +634,7 @@ class PetMainActivity : AppCompatActivity() {
                         payload = com.google.gson.Gson().toJson(payload)
                     )
                 )
-                lastSosSentAt = System.currentTimeMillis()
+                lastSosSentAt = MonoClock.now()
                 PixelToast.show(rootContainer, "已经告诉爸爸妈妈了，别害怕")
                 localTtsManager.speak("已经呼叫爸爸妈妈了，别害怕，待在原地不要乱走")
                 petStateManager.addReward(5, 5)
@@ -837,9 +845,10 @@ class PetMainActivity : AppCompatActivity() {
 
     /**
      * 本地状态变化 3s 节流上报 PET_STATE_SYNC(30) 给主控端
+     * （单调钟：墙钟回拨会让差值恒负、上报永久冻结，主控端宠物视图停更）
      */
     private fun throttledPetStateSync() {
-        val now = System.currentTimeMillis()
+        val now = MonoClock.now()
         if (now - lastStateSyncTs < 3_000L) return
         lastStateSyncTs = now
         runCatching {
@@ -2208,6 +2217,7 @@ class PetMainActivity : AppCompatActivity() {
         super.onDestroy()
         minuteTickerJob?.cancel()
         aiEngine?.stop()
+        localTtsManager.removeProbeListener(probeListener)
         // 不 release：门控是进程级单例，服务与广播接收器共用（Activity 划掉不得影响后台播报）
         soundEffectManager.release()
         runCatching { petStateManager.flush() }

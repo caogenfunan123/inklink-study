@@ -21,6 +21,9 @@ class SoundEffectManager(private val context: Context) {
     private var soundPool: SoundPool? = null
     private var isMuted: Boolean = false
 
+    /** release 后禁止再播放：toneGen 是 lazy，播放会在 release 之后把它重新建出来。 */
+    private var released = false
+
     init {
         val attrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_GAME)
@@ -35,6 +38,10 @@ class SoundEffectManager(private val context: Context) {
     private val toneGen: ToneGenerator? by lazy {
         runCatching { ToneGenerator(AudioManager.STREAM_MUSIC, 70) }.getOrNull()
     }
+
+    /** 音符串延时宿主：成员 Handler + release 时统一 removeCallbacks，
+     *  早期版本每次 play 新建 Handler，播放中的音符回调会把已 release 的实例拖住。 */
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
 
     /** 方波音符串（freq, 时长ms）——chiptune 旋律表。 */
     private val melodies: Map<Sfx, Array<IntArray>> = mapOf(
@@ -53,18 +60,16 @@ class SoundEffectManager(private val context: Context) {
 
     /** 播放 chiptune 音效（非阻塞，失败静默）。 */
     fun play(sfx: Sfx) {
-        if (isMuted) return
+        if (isMuted || released) return
         val notes = melodies[sfx] ?: return
         val gen = toneGen ?: return
         var offset = 0
         for ((freq, dur) in notes) {
-            val f = freq
-            val d = dur
-            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            handler.postDelayed({
                 runCatching {
                     if (isMuted) return@postDelayed
-                    if (f == 0) gen.startTone(ToneGenerator.TONE_PROP_ACK, 1)
-                    else gen.startTone(freqToTone(f), d)
+                    if (freq == 0) gen.startTone(ToneGenerator.TONE_PROP_ACK, 1)
+                    else gen.startTone(freqToTone(freq), dur)
                 }
             }, offset.toLong())
             offset += d + 20
@@ -105,7 +110,12 @@ class SoundEffectManager(private val context: Context) {
     }
 
     fun release() {
+        released = true
+        handler.removeCallbacksAndMessages(null)
         soundPool?.release()
         soundPool = null
+        // ToneGenerator 持有一条原生音频通道：不 release 会随每个 Activity 实例泄漏，
+        // 长会话后 AudioFlinger 资源紧张、新建 ToneGenerator 静默失败变成"没音效"
+        runCatching { toneGen?.release() }
     }
 }

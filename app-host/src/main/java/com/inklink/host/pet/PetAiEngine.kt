@@ -1,5 +1,6 @@
 package com.inklink.host.pet
 
+import com.inklink.common.utils.MonoClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -62,7 +63,8 @@ class PetAiEngine(
     }
 
     private fun complaint(key: String, minGapMs: Long = 60_000L): Boolean {
-        val now = System.currentTimeMillis()
+        // 进程内冷却窗口走单调钟：墙钟回拨会让窗口恒负、台词刷屏
+        val now = MonoClock.now()
         val last = lastComplaintTs[key] ?: 0L
         if (now - last < minGapMs) return false
         lastComplaintTs[key] = now

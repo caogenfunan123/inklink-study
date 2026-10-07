@@ -29,6 +29,10 @@ class MathActivity : AppCompatActivity() {
     private lateinit var sfx: SoundEffectManager
     private val handler = Handler(Looper.getMainLooper())
 
+    /** 结算守卫：答错后 1.2s 的延迟 render 若在 Activity 销毁后仍触发，旧实例会再走一次
+     *  finishLesson（重复发币/写学习记录）。每关只允许结算一次，销毁后一律不再结算。 */
+    private val settled = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private lateinit var tvProgress: TextView
     private lateinit var tvQuestion: TextView
     private lateinit var btnSpeak: MaterialButton
@@ -54,6 +58,13 @@ class MathActivity : AppCompatActivity() {
         )
         btnSpeak.setOnClickListener { speakCurrent() }
         render()
+    }
+
+    override fun onDestroy() {
+        // 延迟 render 若在销毁后执行会触发旧实例 finishLesson：一关双份奖励
+        handler.removeCallbacksAndMessages(null)
+        sfx.release()
+        super.onDestroy()
     }
 
     private fun speakCurrent() {
@@ -102,6 +113,8 @@ class MathActivity : AppCompatActivity() {
     }
 
     private fun finishLesson() {
+        // 结算一次性：复述守卫 + 已销毁 Activity 不再结算（延迟回调可能晚于销毁）
+        if (!settled.compareAndSet(false, true) || isDestroyed || isFinishing) return
         val total = questions.size
         val rate = if (total > 0) correct.toDouble() / total else 0.0
         val stars = if (rate >= 0.9) 3 else if (rate >= 0.6) 2 else 1

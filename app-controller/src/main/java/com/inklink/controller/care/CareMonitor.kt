@@ -23,17 +23,31 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class CareMonitor(private val context: Context) {
 
+    /**
+     * 设备看护状态。字段由传输回调线程（onPeerAlive）写、评估协程读：
+     * ConcurrentHashMap 只保证 map 级安全，字段本身必须 @Volatile，
+     * 否则评估线程可能长期读到陈旧时间戳，出现"活着的设备被判离线"的误报。
+     *
+     * 全部时间戳为单调钟域（见 [MonoClock]）：墙钟回拨会让窗口差值恒负，
+     * 离线判定与提醒冷却同时静默失效。
+     */
     private data class DeviceCareState(
-        var lastAliveTs: Long = 0L,
-        var offlineSinceTs: Long = 0L,
-        var lastOfflineNotifyTs: Long = 0L,
-        var sessionStartTs: Long = 0L,
-        var lastRestNotifyTs: Long = 0L
+        @Volatile var lastAliveTs: Long = 0L,
+        @Volatile var offlineSinceTs: Long = 0L,
+        @Volatile var lastOfflineNotifyTs: Long = 0L,
+        @Volatile var sessionStartTs: Long = 0L,
+        @Volatile var lastRestNotifyTs: Long = 0L
     )
 
     private val states = ConcurrentHashMap<String, DeviceCareState>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    private val hasNotifyPermission = {
+        android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.TIRAMISU ||
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
 
     @Volatile
     private var started = false
@@ -41,7 +55,7 @@ class CareMonitor(private val context: Context) {
     /** 受控端活跃信号（PING/HEARTBEAT 到达时调用）。 */
     fun onPeerAlive(deviceId: String) {
         if (deviceId.isBlank()) return
-        states.getOrPut(deviceId) { DeviceCareState() }.lastAliveTs = System.currentTimeMillis()
+        states.getOrPut(deviceId) { DeviceCareState() }.lastAliveTs = com.inklink.common.utils.MonoClock.now()
     }
 
     fun start() {
@@ -61,7 +75,7 @@ class CareMonitor(private val context: Context) {
     }
 
     private fun evaluate() {
-        val now = System.currentTimeMillis()
+        val now = com.inklink.common.utils.MonoClock.now()
         states.forEach { (deviceId, st) ->
             val online = now - st.lastAliveTs <= OFFLINE_THRESHOLD_MS
             if (st.lastAliveTs == 0L) return@forEach
@@ -100,6 +114,9 @@ class CareMonitor(private val context: Context) {
     }
 
     private fun notify(deviceId: String, title: String, text: String) {
+        // Android 13+ 未授予通知权限时 notify 静默无效：核心看护提醒（离线 30min/
+        // 连续在线 2h）会整体消失且无任何提示，与 sendAlertNotification 口径对齐
+        if (!hasNotifyPermission()) return
         val notification = NotificationCompat.Builder(context, CARE_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)

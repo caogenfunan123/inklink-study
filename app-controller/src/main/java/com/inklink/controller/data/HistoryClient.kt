@@ -3,6 +3,7 @@ package com.inklink.controller.data
 import android.util.Base64
 import com.google.gson.Gson
 import com.inklink.common.protocol.payload.HistoryChunkPayload
+import com.inklink.common.utils.MonoClock
 import com.inklink.controller.state.ControllerState
 import com.inklink.controller.state.HistoryProgress
 import java.io.ByteArrayInputStream
@@ -26,7 +27,9 @@ import java.util.zip.GZIPInputStream
 class HistoryClient(
     private val trackStore: TrackStore,
     private val controllerState: ControllerState,
-    private val stallTimeoutMs: Long = STALL_TIMEOUT_MS
+    private val stallTimeoutMs: Long = STALL_TIMEOUT_MS,
+    /** 停滞判定时钟，可注入以便 JVM 单测（墙钟回拨会让差值恒负、停滞检测与失败判定同时失效）。 */
+    private val clock: () -> Long = { MonoClock.now() }
 ) {
 
     private val gson = Gson()
@@ -52,7 +55,7 @@ class HistoryClient(
         val received = HashSet<Int>()
         var inserted = 0
         var finished = false
-        var lastActivityAt = System.currentTimeMillis()
+        var lastActivityAt = clock()
         var retries = 0
     }
 
@@ -108,7 +111,7 @@ class HistoryClient(
             task.total = payload.total
             if (payload.seq !in task.received) {
                 task.received.add(payload.seq)
-                task.lastActivityAt = System.currentTimeMillis()
+                task.lastActivityAt = clock()
                 val inserted = runCatching { mergeChunk(task.deviceId, payload.data) }.getOrDefault(0)
                 task.inserted += inserted
                 ackSender?.invoke(task.deviceId, task.reqId, payload.seq)
@@ -133,7 +136,7 @@ class HistoryClient(
         io.execute {
             val task = current ?: return@execute
             if (task.finished) return@execute
-            if (System.currentTimeMillis() - task.lastActivityAt < stallTimeoutMs) return@execute
+            if (clock() - task.lastActivityAt < stallTimeoutMs) return@execute
             if (task.retries >= MAX_RETRIES) {
                 task.finished = true
                 current = null
@@ -148,7 +151,7 @@ class HistoryClient(
                 return@execute
             }
             task.retries++
-            task.lastActivityAt = System.currentTimeMillis()
+            task.lastActivityAt = clock()
             sendRequest(task, task.received.toList())
         }
     }

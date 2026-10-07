@@ -184,6 +184,7 @@ class PoemActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         handler.removeCallbacksAndMessages(null)
+        sfx.release()
         super.onDestroy()
     }
 }

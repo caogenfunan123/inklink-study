@@ -82,4 +82,37 @@ class GeofenceConfigTest {
         }
         assertTrue(threw)
     }
+
+    @Test
+    fun `toGeoFencesOrNull 拒绝缺 radius 的载荷`() {
+        // Gson 不走 Kotlin 构造默认值：缺 radius 的 JSON 反序列化出 0.0，
+        // 直接构造 GeoFence 会抛异常（曾因此打死传输回调线程）
+        val cfg = gson.fromJson("""{"lat":31.0,"lng":121.0}""", GeofenceConfig::class.java)
+        assertNull(cfg.toGeoFencesOrNull())
+    }
+
+    @Test
+    fun `toGeoFencesOrNull 拒绝 radius 为 0 与越界坐标`() {
+        val zeroRadius = gson.fromJson(
+            """{"lat":31.0,"lng":121.0,"radius":0.0,"fences":[{"lat":31.0,"lng":121.0,"radius":0.0}]}""",
+            GeofenceConfig::class.java
+        )
+        assertNull(zeroRadius.toGeoFencesOrNull())
+        val outOfRange = gson.fromJson(
+            """{"lat":31.0,"lng":121.0,"radius":200.0,"fences":[{"lat":91.0,"lng":121.0,"radius":200.0}]}""",
+            GeofenceConfig::class.java
+        )
+        assertNull(outOfRange.toGeoFencesOrNull())
+    }
+
+    @Test
+    fun `toGeoFencesOrNull 放行合法载荷`() {
+        val cfg = gson.fromJson(
+            """{"lat":31.0,"lng":121.0,"radius":200.0,"fences":[{"lat":31.0,"lng":121.0,"radius":200.0,"name":"家"}]}""",
+            GeofenceConfig::class.java
+        )
+        val fences = cfg.toGeoFencesOrNull()
+        assertEquals(1, fences?.size)
+        assertEquals("家", fences?.get(0)?.name)
+    }
 }

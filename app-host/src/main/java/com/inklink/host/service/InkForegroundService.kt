@@ -40,6 +40,7 @@ import com.inklink.common.transport.TransportManager
 import com.inklink.common.transport.TransportMode
 import com.inklink.common.utils.HeartbeatPolicy
 import com.inklink.common.utils.IdempotentController
+import com.inklink.common.utils.MonoClock
 import com.inklink.common.utils.MonoThrottle
 import com.inklink.common.utils.ImageUtil
 import com.inklink.common.utils.NetworkUtil
@@ -88,7 +89,7 @@ class InkForegroundService : Service() {
     private lateinit var treasureHunter: com.inklink.host.state.GpsTreasureHunter
     private val offlineEventQueue by lazy { com.inklink.host.queue.OfflineEventQueue(this) }
     private var pingJob: kotlinx.coroutines.Job? = null
-    private var lastPongTs: Long = System.currentTimeMillis()
+    private var lastPongTs: Long = MonoClock.now()
     private val serviceScope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default + kotlinx.coroutines.SupervisorJob())
 
     private var powerManager: PowerManager? = null
@@ -294,7 +295,7 @@ class InkForegroundService : Service() {
             hostState.setConnected(connected)
             hostState.appendLog(if (connected) "主控端已连接" else "主控端已断开")
             if (connected) {
-                lastPongTs = System.currentTimeMillis()
+                lastPongTs = MonoClock.now()
                 broadcastDeviceStatus()
                 flushOfflineEvents()
             }
@@ -302,7 +303,9 @@ class InkForegroundService : Service() {
     }
 
     private fun routeTextMessage(message: InkMessage) {
-        when (message.messageType) {
+        // 单分支异常不得扩散为整条命令链死亡：传输回调线程上的未捕获异常会
+        // 打死该传输实例的回调通道（后续所有指令静默失效，日志干净、重启自愈）
+        runCatching { when (message.messageType) {
             MessageType.TEXT -> {
                 sendAck(message.msgId, message.fromDeviceId, AckPayload.CODE_OK)
                 message.payload?.let { hostState.appendText(it) }
@@ -318,7 +321,7 @@ class InkForegroundService : Service() {
                 hostState.clearScreen()
             }
             MessageType.GEOFENCE_CONFIG -> {
-                applyGeofence(message.payload)
+                applyGeofence(message)
                 sendAck(message.msgId, message.fromDeviceId, AckPayload.CODE_OK)
             }
             MessageType.AUDIO_START -> onAudioStart()
@@ -368,12 +371,14 @@ class InkForegroundService : Service() {
                 }
             }
             MessageType.HEARTBEAT, MessageType.PONG -> {
-                lastPongTs = System.currentTimeMillis()
+                lastPongTs = MonoClock.now()
                 if (!hostState.connected) {
                     hostState.setConnected(true)
                 }
             }
             else -> Unit
+        } }.onFailure { e ->
+            hostState.appendLog("消息处理失败(type=${message.messageType}): ${e.javaClass.simpleName}: ${e.message}")
         }
     }
 
@@ -490,8 +495,8 @@ class InkForegroundService : Service() {
                         )
                     )
                 }
-                // 45s 超时判定
-                if (System.currentTimeMillis() - lastPongTs > 45_000L && hostState.connected) {
+                // 45s 超时判定（单调钟：系统时间回拨会让墙钟差值恒负、离线判定永久失效）
+                if (MonoClock.now() - lastPongTs > 45_000L && hostState.connected) {
                     hostState.setConnected(false)
                     hostState.appendLog("心跳超时 (45s)，判定主控端离线")
                 }
@@ -572,12 +577,22 @@ class InkForegroundService : Service() {
         }
     }
 
-    private fun applyGeofence(payload: String?) {
-        val cfg = runCatching { gson.fromJson(payload, GeofenceConfig::class.java) }.getOrNull() ?: return
-        val fences = cfg.toGeoFences()
+    private fun applyGeofence(message: InkMessage) {
+        val cfg = runCatching { gson.fromJson(message.payload, GeofenceConfig::class.java) }.getOrNull() ?: return
+        // 畸形载荷（缺 radius/越界/非有限）必须拒收而不是触发 GeoFence.require：
+        // 异常若在传输回调线程逃逸，整条命令链都会静默死亡
+        val fences = cfg.toGeoFencesOrNull()
+        if (fences == null) {
+            hostState.appendLog("拒绝非法围栏配置: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}")
+            sendAck(
+                message.msgId, message.fromDeviceId,
+                AckPayload.CODE_EXECUTION_ERROR, "围栏配置非法"
+            )
+            return
+        }
         geofenceManager.updateFences(fences)
         // 落盘：服务/进程重启后恢复（围栏生命周期对齐设备而非进程）
-        payload?.let { geofenceStore.save(it) }
+        message.payload?.let { geofenceStore.save(it) }
         hostState.appendLog("更新围栏 ${fences.size} 个: lat=${cfg.lat}, lng=${cfg.lng}, r=${cfg.radius}m")
     }
 
@@ -1176,6 +1191,8 @@ class InkForegroundService : Service() {
     }
 
     private fun flushOfflineEvents() {
+        // 注意：OfflineEventQueue 当前没有任何 enqueue 调用点（离线事件补传尚未接线，
+        // 属功能批次），drain 只会得到空表。背包全量同步才是现行重连补偿机制。
         val events = offlineEventQueue.drain()
         // 重连后按协议做 PET_BAG_SYNC(40) 背包全量同步（覆盖 Ably 72h 历史丢失场景，
         // 短离线全量同步是超集行为，主控端 PetDetailActivity 直接消费该消息）
@@ -1189,7 +1206,10 @@ class InkForegroundService : Service() {
                 payload = gson.toJson(bag)
             )
         )
-        hostState.appendLog("重连成功：背包全量同步 (${bag.petList.size} 只)，离线事件 ${events.size} 条")
+        hostState.appendLog("重连成功：背包全量同步 (${bag.petList.size} 只)")
+        if (events.isNotEmpty()) {
+            hostState.appendLog("离线事件队列有 ${events.size} 条未接线补传，已随重连丢弃")
+        }
     }
 
     private fun showRemoteTaskNotification(payload: com.inklink.common.protocol.payload.RemoteTaskPayload) {

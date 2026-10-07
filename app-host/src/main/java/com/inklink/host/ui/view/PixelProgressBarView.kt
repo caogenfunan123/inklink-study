@@ -7,6 +7,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
+import com.inklink.common.utils.MonoClock
 import kotlin.math.max
 import kotlin.math.min
 
@@ -42,7 +43,7 @@ class PixelProgressBarView @JvmOverloads constructor(
     private val blinkRunnable = object : Runnable {
         override fun run() {
             if (!blinking) return
-            val now = System.currentTimeMillis()
+            val now = MonoClock.now()
             if (now - lastBlink > 500) { blinkOn = !blinkOn; lastBlink = now; invalidate() }
             postOnAnimationCompat()
         }
@@ -66,7 +67,7 @@ class PixelProgressBarView @JvmOverloads constructor(
     private fun syncBlink() {
         val shouldBlink = progress in 1 until dangerThreshold
         if (shouldBlink && !blinking) {
-            blinking = true; lastBlink = System.currentTimeMillis(); blinkOn = true
+            blinking = true; lastBlink = MonoClock.now(); blinkOn = true
             postOnAnimationCompat()
         } else if (!shouldBlink && blinking) {
             blinking = false; blinkOn = true

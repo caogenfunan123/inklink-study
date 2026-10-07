@@ -29,6 +29,29 @@ data class GeofenceConfig(
             ?.map { GeoFence(it.lat, it.lng, it.radius, it.name) }
             ?: listOf(GeoFence(lat, lng, radius))
 
+    /**
+     * 校验版展开：任一条目非法（半径 ≤0/非有限、经纬度越界/非有限）返回 null。
+     *
+     * 对端（主控端）不可信：Gson 不走 Kotlin 构造默认值，缺 radius 的载荷会反序列化出
+     * 0.0，直接触发 [GeoFence] 的 require 抛异常——该异常发生在传输回调线程上，
+     * 会打死整条命令链（后续所有指令静默失效）。畸形载荷必须被拒绝而不是被信任。
+     */
+    fun toGeoFencesOrNull(): List<GeoFence>? {
+        fun valid(lat: Double, lng: Double, radius: Double): Boolean =
+            radius > 0 && lat.isFinite() && lng.isFinite() &&
+                lat in -90.0..90.0 && lng in -180.0..180.0
+        val entries = fences?.takeIf { it.isNotEmpty() }
+        if (entries == null) {
+            return if (valid(lat, lng, radius)) listOf(GeoFence(lat, lng, radius)) else null
+        }
+        val built = ArrayList<GeoFence>(entries.size)
+        for (e in entries) {
+            if (!valid(e.lat, e.lng, e.radius)) return null
+            built.add(GeoFence(e.lat, e.lng, e.radius, e.name))
+        }
+        return built
+    }
+
     companion object {
         fun from(fence: GeoFence): GeofenceConfig =
             GeofenceConfig(fence.latitude, fence.longitude, fence.radiusMeters)

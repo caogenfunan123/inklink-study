@@ -41,8 +41,19 @@ class LocalTtsManager(
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private var focusRequest: AudioFocusRequest? = null
 
-    /** TTS 引擎异步初始化完成前收到的待朗读文本，init 成功后自动补读 */
-    private var pendingSpeech: Pair<String, (() -> Unit)?>? = null
+    /**
+     * TTS 引擎异步初始化完成前收到的待朗读队列。
+     *
+     * 早期是单槽 pendingSpeech：连发两声时第二次赋值直接覆盖第一次，
+     * 第一次的 onDone 永不回调（TaskPlayActionReceiver 靠 15s 兜底才回收
+     * PendingResult），且 utteranceId 同为「tts_毫秒」同毫秒会撞号导致回调错配。
+     */
+    private val pendingSpeech = ArrayDeque<Pair<String, (() -> Unit)?>>()
+
+    /** 朗读完成回调表：utteranceId -> onDone。单一监听器分发表，避免每次 speak
+     *  重建 listener 把上一条朗读的 onDone 挤掉。 */
+    private val doneCallbacks = java.util.concurrent.ConcurrentHashMap<String, (() -> Unit)?>()
+    private val utteranceSeq = java.util.concurrent.atomic.AtomicLong(0L)
 
     private val focusChangeListener = AudioManager.OnAudioFocusChangeListener { focusChange ->
         when (focusChange) {
@@ -106,9 +117,25 @@ class LocalTtsManager(
             onUnavailable?.invoke()
         }
         // 初始化完成（无论成败）后补读 pending，避免 BroadcastReceiver 短生命周期调用被静默吞掉
-        pendingSpeech?.let { (text, onDone) ->
-            pendingSpeech = null
-            if (isReady) speak(text, onDone) else onDone?.invoke()
+        if (pendingSpeech.isNotEmpty()) {
+            val queued = pendingSpeech.toList()
+            pendingSpeech.clear()
+            queued.forEach { (text, onDone) ->
+                if (isReady) speak(text, onDone) else onDone?.invoke()
+            }
+        }
+    }
+
+    /** 引擎就绪后注册的唯一进度监听器：按 utteranceId 分发给对应回调。 */
+    private val utteranceListener = object : UtteranceProgressListener() {
+        override fun onStart(utteranceId: String?) {}
+        override fun onDone(utteranceId: String?) {
+            abandonAudioFocus()
+            utteranceId?.let { doneCallbacks.remove(it) }?.invoke()
+        }
+        override fun onError(utteranceId: String?) {
+            abandonAudioFocus()
+            utteranceId?.let { doneCallbacks.remove(it) }?.invoke()
         }
     }
 
@@ -118,32 +145,23 @@ class LocalTtsManager(
             return
         }
         if (!isReady) {
-            // 引擎未就绪：暂存文本，onInit 后自动补读；引擎彻底不可用则降级回调
+            // 引擎未就绪：入队暂存，onInit 后自动补读；引擎彻底不可用则降级回调
             if (tts == null) {
                 onDone?.invoke()
             } else {
-                pendingSpeech = text to onDone
+                pendingSpeech.addLast(text to onDone)
             }
             return
         }
 
         requestAudioFocus()
 
-        val utteranceId = "tts_${System.currentTimeMillis()}"
+        // 自增序列：毫秒时间戳会在同毫秒两条朗读时撞号，导致 A 的 onDone 触发 B 的 finish
+        val utteranceId = "tts_${utteranceSeq.incrementAndGet()}"
         if (onDone != null) {
-            tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) {}
-                override fun onDone(utteranceId: String?) {
-                    abandonAudioFocus()
-                    onDone()
-                }
-                override fun onError(utteranceId: String?) {
-                    abandonAudioFocus()
-                    onDone()
-                }
-            })
+            doneCallbacks[utteranceId] = onDone
         }
-
+        tts?.setOnUtteranceProgressListener(utteranceListener)
         tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
     }
 
@@ -189,5 +207,8 @@ class LocalTtsManager(
         tts = null
         isReady = false
         readyNotified = false
+        pendingSpeech.clear()
+        // 未兑现的回调补发，避免调用方（如 TaskPlayActionReceiver 的 finish）悬挂
+        doneCallbacks.values.toList().also { doneCallbacks.clear() }.forEach { it?.invoke() }
     }
 }

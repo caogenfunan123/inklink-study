@@ -70,7 +70,9 @@ class GpsTrackLogger(context: Context) {
         while (day <= safeEnd && scanDays <= MAX_SCAN_DAYS) {
             val f = File(root, "${dayFormat(day)}.jsonl")
             if (f.isFile) {
-                f.readLines().forEach { line ->
+                // cleanup 线程可能并发删除该文件（30 天保留期），读取失败按无数据处理
+                val lines = runCatching { f.readLines() }.getOrNull() ?: emptyList()
+                lines.forEach { line ->
                     if (line.isBlank()) return@forEach
                     runCatching { gson.fromJson(line, TrackPoint::class.java) }.getOrNull()
                         ?.takeIf { it.t in startTs..endTs }
@@ -113,7 +115,7 @@ class GpsTrackLogger(context: Context) {
                 root.listFiles { f -> f.isFile && f.name.endsWith(".jsonl") }?.forEach { f ->
                     val day = f.name.removeSuffix(".jsonl")
                     if (day.matches(DAY_PATTERN)) {
-                        val t = runCatching { dayFormatter.parse(day)?.time }.getOrNull()
+                        val t = runCatching { dayFormatterThreadLocal.get().parse(day)?.time }.getOrNull()
                         if (t != null && t < cutoff) f.delete()
                     }
                 }
@@ -121,7 +123,7 @@ class GpsTrackLogger(context: Context) {
         }
     }
 
-    private fun dayFormat(time: Long): String = dayFormatter.format(Date(time))
+    private fun dayFormat(time: Long): String = dayFormatterThreadLocal.get().format(Date(time))
 
     /** 等待后台写队列清空并强制 flush（仅供单测确定性断言）。 */
     fun flushForTest() {
@@ -147,6 +149,13 @@ class GpsTrackLogger(context: Context) {
         private const val FLUSH_INTERVAL_SEC = 30L
         private val DAY_PATTERN = Regex("\\d{8}")
 
-        private val dayFormatter = SimpleDateFormat("yyyyMMdd", Locale.US)
+        /**
+         * 线程本地日期格式器。
+         *
+         * SimpleDateFormat 非线程安全，而 dayFormat 会被 GPS 回调线程、flush io 线程、
+         * 历史读线程、清理线程并发调用：内部 Calendar 并发轻则产出错误日期字符串
+         * （轨迹进错文件 = 整页轨迹消失），重则抛 ArrayIndexOutOfBoundsException。
+         */
+        private val dayFormatterThreadLocal = ThreadLocal.withInitial { SimpleDateFormat("yyyyMMdd", Locale.US) }
     }
 }

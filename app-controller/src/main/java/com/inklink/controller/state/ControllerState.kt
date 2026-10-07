@@ -5,6 +5,7 @@ import android.os.Looper
 import com.inklink.common.protocol.payload.AckPayload
 import com.inklink.common.protocol.payload.DeviceStatusPayload
 import com.inklink.common.service.gps.GpsReport
+import com.inklink.common.utils.MonoClock
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -55,6 +56,15 @@ class ControllerState {
     private val ackListeners = CopyOnWriteArrayList<(AckPayload) -> Unit>()
     private val mainHandler = Handler(Looper.getMainLooper())
 
+    /**
+     * 多设备 Map 的读-改-写串行化。
+     *
+     * @Volatile 只保证引用替换可见，「p = p + (id to v)」这种读-改-写并非原子：
+     * 两条并发消息回调（Ably 分发、模式切换新旧 transport 交叠、history io 线程）
+     * 会基于陈旧基线互相覆盖，静默丢一次位置/状态更新。
+     */
+    private val stateLock = Any()
+
     var connected = false
         private set
     var latestGps: GpsReport? = null
@@ -69,7 +79,7 @@ class ControllerState {
     var gpsByDevice: Map<String, GpsReport> = emptyMap()
         private set
 
-    /** 各受控端最近活跃时间：deviceId → 最近收到消息的时间戳。 */
+    /** 各受控端最近活跃时间：deviceId → 最近收到消息的单调钟读数。 */
     @Volatile
     var lastSeenByDevice: Map<String, Long> = emptyMap()
         private set
@@ -115,7 +125,9 @@ class ControllerState {
 
     /** 学习简报落状态(主线程回调刷新卡片)。 */
     fun setLearnSummary(deviceId: String, summary: String) {
-        learnSummaryByDevice = learnSummaryByDevice + (deviceId to summary)
+        synchronized(stateLock) {
+            learnSummaryByDevice = learnSummaryByDevice + (deviceId to summary)
+        }
         notifyChanged()
     }
 
@@ -125,22 +137,28 @@ class ControllerState {
     }
 
     fun setGps(deviceId: String, gps: GpsReport) {
-        gpsByDevice = gpsByDevice + (deviceId to gps)
-        lastSeenByDevice = lastSeenByDevice + (deviceId to System.currentTimeMillis())
-        trajectoryByDevice = trajectoryByDevice +
-                (deviceId to ((trajectoryByDevice[deviceId] ?: emptyList()) + gps).takeLast(MAX_TRAJECTORY_POINTS))
-        latestGps = gps
+        synchronized(stateLock) {
+            gpsByDevice = gpsByDevice + (deviceId to gps)
+            lastSeenByDevice = lastSeenByDevice + (deviceId to MonoClock.now())
+            trajectoryByDevice = trajectoryByDevice +
+                    (deviceId to ((trajectoryByDevice[deviceId] ?: emptyList()) + gps).takeLast(MAX_TRAJECTORY_POINTS))
+            latestGps = gps
+        }
         notifyChanged()
     }
 
     fun setDeviceStatus(deviceId: String, status: DeviceStatusPayload) {
-        statusByDevice = statusByDevice + (deviceId to status)
-        lastSeenByDevice = lastSeenByDevice + (deviceId to System.currentTimeMillis())
+        synchronized(stateLock) {
+            statusByDevice = statusByDevice + (deviceId to status)
+            lastSeenByDevice = lastSeenByDevice + (deviceId to MonoClock.now())
+        }
         notifyChanged()
     }
 
     fun setDeviceRinging(deviceId: String, ringing: Boolean) {
-        isRingingByDevice = isRingingByDevice + (deviceId to ringing)
+        synchronized(stateLock) {
+            isRingingByDevice = isRingingByDevice + (deviceId to ringing)
+        }
         notifyChanged()
     }
 
@@ -151,7 +169,27 @@ class ControllerState {
 
     fun markSeen(deviceId: String) {
         if (deviceId.isBlank()) return
-        lastSeenByDevice = lastSeenByDevice + (deviceId to System.currentTimeMillis())
+        synchronized(stateLock) {
+            lastSeenByDevice = lastSeenByDevice + (deviceId to MonoClock.now())
+        }
+        notifyChanged()
+    }
+
+    /**
+     * 清除某设备的全部内存数据（用户删除设备时调用）。
+     * 不调用的话：Map 只增不减，地图清理分支永远命中不了，被删设备的
+     * Marker/轨迹/状态会残留在界面上，焦点逻辑还可能把它算作"最近上报"。
+     */
+    fun removeDeviceData(deviceId: String) {
+        synchronized(stateLock) {
+            gpsByDevice = gpsByDevice - deviceId
+            lastSeenByDevice = lastSeenByDevice - deviceId
+            statusByDevice = statusByDevice - deviceId
+            isRingingByDevice = isRingingByDevice - deviceId
+            trajectoryByDevice = trajectoryByDevice - deviceId
+            learnSummaryByDevice = learnSummaryByDevice - deviceId
+            if (selectedDeviceId == deviceId) selectedDeviceId = null
+        }
         notifyChanged()
     }
 
@@ -175,8 +213,9 @@ class ControllerState {
     }
 
     fun isOnline(deviceId: String): Boolean {
+        // 单调钟：墙钟被调快会让活着的设备显示离线、调慢让离线设备显示在线
         val lastSeen = lastSeenByDevice[deviceId] ?: return false
-        return System.currentTimeMillis() - lastSeen < ONLINE_THRESHOLD_MS
+        return MonoClock.now() - lastSeen < ONLINE_THRESHOLD_MS
     }
 
     /**
@@ -216,7 +255,12 @@ class ControllerState {
     }
 
     companion object {
-        const val ONLINE_THRESHOLD_MS = 60_000L
+        /**
+         * 在线超时。与 CareMonitor.OFFLINE_THRESHOLD_MS（45s）保持同一口径：
+         * 以前 UI 60s / 看护 45s 两个值，设备恰在 45-60s 无信号区间时
+         * Dashboard 显示在线而看护已计为离线，家长端口径互相矛盾。
+         */
+        const val ONLINE_THRESHOLD_MS = 45_000L
         const val MAX_TRAJECTORY_POINTS = 500
     }
 }

@@ -336,6 +336,9 @@ class InkControllerApplication : Application() {
 
     fun removeDevice(deviceId: String) {
         deviceRepository.remove(deviceId)
+        // 必须同步清 ControllerState：Map 只增不减时地图清理分支永不命中，
+        // 被删设备的 Marker/轨迹/看护状态会一直残留在界面上
+        controllerState.removeDeviceData(deviceId)
         if (controllerState.selectedDeviceId == deviceId) {
             selectDevice(null)
         }
@@ -555,7 +558,9 @@ class InkControllerApplication : Application() {
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
             .build()
-        nm.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
+        // 自增 id：以前用 currentTimeMillis() % Int.MAX_VALUE，同毫秒两条告警
+        // 会算出同一个 id，第一条被第二条顶掉
+        nm.notify(notifySeq.incrementAndGet(), notification)
     }
 
     private fun createNotificationChannel() {
@@ -572,6 +577,9 @@ class InkControllerApplication : Application() {
 
     companion object {
         private const val ALERT_CHANNEL_ID = "inklink_alert"
+
+        /** 告警通知 id 自增序列（同毫秒双告警也不会互相覆盖）。 */
+        private val notifySeq = java.util.concurrent.atomic.AtomicInteger(0)
 
         /** 告警通知点击跳转 MapActivity 时聚焦的设备 ID extra。 */
         const val EXTRA_FOCUS_DEVICE = "extra_focus_device"
