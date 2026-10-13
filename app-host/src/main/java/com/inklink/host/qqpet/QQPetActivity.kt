@@ -36,6 +36,16 @@ import java.util.concurrent.Executors
  */
 class QQPetActivity : AppCompatActivity() {
 
+    companion object {
+        /**
+         * 小游戏游玩分钟数上报（移植上游 GameActivity 的 gamePlayed emit）：
+         * 大厅页 games.ts/community.ts 的 onGamePlayed 靠它结算游戏厅内每日奖励
+         * （元宝/心情/成长，日上限 60 分钟）。由 QQPetGameActivity 结束时经此分发，
+         * 对大厅页 WebView 执行 __qqpet.emit；大厅已销毁时为 null，静默丢弃。
+         */
+        var gamePlayedListener: ((Double) -> Unit)? = null
+    }
+
     private lateinit var web: WebView
     private val io = Executors.newCachedThreadPool()
 
@@ -64,6 +74,9 @@ class QQPetActivity : AppCompatActivity() {
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
         web.loadUrl("$QQPET_ORIGIN/index.html")
+        gamePlayedListener = { minutes ->
+            web.evaluateJavascript("__qqpet.emit('gamePlayed', $minutes)", null)
+        }
     }
 
     override fun onBackPressed() {
@@ -72,6 +85,7 @@ class QQPetActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         io.shutdown()
+        gamePlayedListener = null
         web.destroy()
         super.onDestroy()
     }
