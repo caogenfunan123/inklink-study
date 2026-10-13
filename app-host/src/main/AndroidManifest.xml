@@ -64,6 +64,19 @@
             android:exported="false"
             android:screenOrientation="portrait" />
 
+        <!-- QQPet 游戏厅（third_party/qqpet 合并）：桌面宠页面 + 小游戏全屏播放 -->
+        <activity
+            android:name=".qqpet.QQPetActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:screenOrientation="portrait" />
+
+        <activity
+            android:name=".qqpet.QQPetGameActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:screenOrientation="sensorLandscape" />
+
         <activity
             android:name=".ui.FriendActivity"
             android:exported="false"
