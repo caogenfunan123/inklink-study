@@ -27,7 +27,8 @@ InkLink 是双端安卓项目：孩子端「电子宠物 + 幼小衔接学习乐
 | 模块 | 描述 | README |
 |------|------|--------|
 | `common/` | 协议/传输/音频/定位/工具公共库 | [README](./模块/common.md) |
-| `app-host/` | 孩子端：宠物+学习+管控受控侧 | [README](./模块/app-host.md) |
+| `app-host/` | 孩子端：宠物+学习+游戏厅+管控受控侧 | [README](./模块/app-host.md) |
+| `qqpet/`（app-host 内嵌） | QQPet 游戏厅：WebView+Ruffle，虚拟 origin Serve 素材 | [README](./模块/qqpet-游戏厅.md) |
 | `app-controller/` | 家长端：设备管理/地图/宠物关怀 | [README](./模块/app-controller.md) |
 | `tools/` | 五条资产加工管线 | [README](./模块/tools-资产管线.md) |
 
@@ -95,4 +96,5 @@ python tools/pet_audio/generate_sfx.py --deploy          # 重生成音效并落
 - 已交付：M1（资产管线+识字屋+协议47+简报）、M2（拼音/口算/古诗/复习谷/错题本/护眼/舒尔特，全原生）、历史轨迹补传四批（设备管理/围栏可视化/轨迹回放/离线历史拉取）
 - 2026-10-04 全面复审：3 Blocker + 16 Major 已修，12 Minor 遗留（见[复盘报告](./history-sync/global-review-2026-10-04.md)）
 - 2026-10-07 第三轮全仓复盘：P0 畸形围栏失联 + P1 墙钟窗口/Ably Key/双结算 + P2 串台·泄漏·竞态·假开关共 17 项已修（同报告 4c 节，提交 e451b2d/073bd91）
+- 2026-10-13 原生单机小游戏下线 + QQPet 游戏厅合并进 app-host（LFS 素材 347MB 经 CI 入库、CI 改造为 build/release 两 job，见[合并复盘](./history-sync/qqpet-integration-2026-10-13.md)）
 - 未开工：M3（作业布置 48/49 UI、学习报告页、习惯打卡、英语字母岛）、笔顺描红、P2 项

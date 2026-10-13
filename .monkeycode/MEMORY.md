@@ -88,5 +88,17 @@ Entries discovered by the Agent during task execution should follow this format:
   - 用户明确选择公开全量：GPL-3.0 代码公开合规（LICENSE 随仓）；**腾讯素材（resources/pet）由用户自行决定公开再分发，风险自负**；InkLink Kotlin 代码不受 GPL 传染（独立模块独立 APK，仅同仓共存）
   - LFS 素材 329MB 由 **CI 代劳入库**：本沙盒出网限速 ~12KB/s（多连接并发无效），8 小时以上不可行；改为 `.github/workflows/assets-import.yml`（workflow_dispatch，GITHUB_TOKEN contents:write）在 runner 上固定克隆上游 db7cf74 + git lfs pull → 拷入 third_party/qqpet/resources/ → 提交推送，内置文件数/指针守卫、无变更跳过；用户本地推送为备用（流程见 third_party/qqpet/VENDORED.md）。素材就位前 qqpet job 守卫生效跳过
   - 发版触发改为仅 `v*` tag push 或 workflow_dispatch（普通 push 只跑单测+构建，不建 Release）；tag_name 用 github.ref_name，dispatch 用 v1.2.0-<run_number>
-  - CI 三 job（build/qqpet/release）：qqpet job 用「目录缺失或指针残留」守卫跳过，LFS 未到位时双端构建与（tag）发版零影响；LFS 缓存 restore/save 拆分，素材就位才固化（key qqpet-lfs-v1，手工升级）
+  - 2026-10-13 合并进 app-host 后 CI 改为两 job（build/release）：build job 内完成 LFS pull + 素材就位守卫（缺失硬失败）+ Node22 npm ci/typecheck/build:android-web + 单测 + assembleRelease；原 qqpet job 退役，独立 net.ankio.qqpet APK 不再构建；release 只下载 inklink-apks
   - .gitignore 坑仍在：`**/android/gradlew`、`*.jar`、`**/build/` 误杀 vendor 文件，靠根 .gitignore 否定规则兜住；新增 vendor 目录先跑 `find third_party -type f | git check-ignore --stdin` 排查
+
+[QQPet 游戏厅合并（app-host 内嵌）]
+- Date: 2026-10-13
+- Context: Discovered by Agent while 将 vendor qqpet 游戏厅合并进 app-host 并改造 CI
+- Category: Build Methods / Workflow & Collaboration
+- Instructions:
+  - 移植落点 `app-host/src/main/java/com/inklink/host/qqpet/`：QQPetAssetClient（1:1 移植上游 AssetClient）/ QQPetActivity（index.html 大厅 + window.QQPetNative 全桥）/ QQPetGameActivity（game.html 全屏）；上游壳 PetService/BootReceiver/MainActivity/TextActivity 悬浮窗生态刻意不移植，四方法打桩
+  - 桥契约唯一定义在 `third_party/qqpet/src/android/bridge.ts`（14 方法，`__qqpet.resolve` 回填）；改契约必须同步 Kotlin 实现与 `.monkeycode/docs/模块/qqpet-游戏厅.md` 契约表
+  - `gamePlayed` 分钟上报必须保留：QQPetGameActivity 结束时经 QQPetActivity.gamePlayedListener 对大厅页 `__qqpet.emit('gamePlayed', n)`，游戏厅内每日元宝/心情/成长奖励靠它结算（漏掉奖励永不触发）
+  - 本地构建 app-host 前必须 `git lfs pull` + `cd third_party/qqpet && npm run build:android-web`，否则 assets 缺 vite 产物/素材
+  - app-host 资产口径：assets.srcDirs 注入 `third_party/qqpet/out/android` + `third_party/qqpet/resources`；noCompress += swf/png/gif/jpg/mp3/wasm；out/android 被 vendor .gitignore 的 out/ 忽略，不入库由 CI 重建
+  - push 遇 non-fast-forward 先 fetch 看分叉：assets-import 工作流会自行推提交；本地未跟踪的 third_party/qqpet/resources/（真实素材）会挡住 rebase，先 `mv` 到 /tmp 再 rebase；LFS oid 校验用 `git cat-file -p :<path>` 取指针内 oid sha256，`git ls-files -s` 取到的是指针文件 git 哈希（会误判）
