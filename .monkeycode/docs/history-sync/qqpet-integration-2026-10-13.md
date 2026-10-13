@@ -10,7 +10,7 @@
 |------|------|------|------|
 | 游戏下线 | ff5f9ae | 删 game/PetMiniGameManager、PetArcadeMap、街机资产契约、SpinWheelView、tools/pet_arcade、assets/pixel_arcade（240 文件）；PetMainActivity 2225→1918 行；PetSpriteView 1519→1462 行；PIXEL_ARCADE_SPRITE 枚举值移除；外观菜单 5→4 项；六处文档同步 | CI 38355519040 success |
 | 素材入库 | 202848d + 966a6399 | 新建 assets-import.yml 工作流；run 38360926303 success，347MB / 8059 文件落 third_party/qqpet/resources/ | 守卫全过（文件数/指针抽样/幂等） |
-| 游戏厅合并 | 3e6de7b7 | qqpet/ 三文件 373 行；manifest 注册；btnGames 接线；build.gradle sourceSets+noCompress+版本 2/0.2.0；CI 改两 job | CI 38366560485（见 §5 待办） |
+| 游戏厅合并 | 3e6de7b7 | qqpet/ 三文件 373 行；manifest 注册；btnGames 接线；build.gradle sourceSets+noCompress+版本 2/0.2.0；CI 改两 job | CI 38366560485 build success（release 按设计跳过） |
 
 ## 2. 关键决策记录
 

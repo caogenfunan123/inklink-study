@@ -86,7 +86,7 @@ Entries discovered by the Agent during task execution should follow this format:
 - Instructions:
   - inklink-study 最终为 **public**：私有仓库 artifact/release 存储计入 Free 500MB 账户配额（已因 21 个旧 Release×86MB≈1.8GB 打满）；公开仓库 Actions 免费不计该配额。转公开即解锁 CI 产物上传
   - 用户明确选择公开全量：GPL-3.0 代码公开合规（LICENSE 随仓）；**腾讯素材（resources/pet）由用户自行决定公开再分发，风险自负**；InkLink Kotlin 代码不受 GPL 传染（独立模块独立 APK，仅同仓共存）
-  - LFS 素材 329MB 由 **CI 代劳入库**：本沙盒出网限速 ~12KB/s（多连接并发无效），8 小时以上不可行；改为 `.github/workflows/assets-import.yml`（workflow_dispatch，GITHUB_TOKEN contents:write）在 runner 上固定克隆上游 db7cf74 + git lfs pull → 拷入 third_party/qqpet/resources/ → 提交推送，内置文件数/指针守卫、无变更跳过；用户本地推送为备用（流程见 third_party/qqpet/VENDORED.md）。素材就位前 qqpet job 守卫生效跳过
+  - LFS 素材 329MB 由 **CI 代劳入库**：本沙盒出网限速 ~12KB/s（多连接并发无效），8 小时以上不可行；改为 `.github/workflows/assets-import.yml`（workflow_dispatch，GITHUB_TOKEN contents:write）在 runner 上固定克隆上游 db7cf74 + git lfs pull → 拷入 third_party/qqpet/resources/ → 提交推送，内置文件数/指针守卫、无变更跳过；用户本地推送为备用（流程见 third_party/qqpet/VENDORED.md）。素材已于 2026-10-13 入库（提交 966a6399）
   - 发版触发改为仅 `v*` tag push 或 workflow_dispatch（普通 push 只跑单测+构建，不建 Release）；tag_name 用 github.ref_name，dispatch 用 v1.2.0-<run_number>
   - 2026-10-13 合并进 app-host 后 CI 改为两 job（build/release）：build job 内完成 LFS pull + 素材就位守卫（缺失硬失败）+ Node22 npm ci/typecheck/build:android-web + 单测 + assembleRelease；原 qqpet job 退役，独立 net.ankio.qqpet APK 不再构建；release 只下载 inklink-apks
   - .gitignore 坑仍在：`**/android/gradlew`、`*.jar`、`**/build/` 误杀 vendor 文件，靠根 .gitignore 否定规则兜住；新增 vendor 目录先跑 `find third_party -type f | git check-ignore --stdin` 排查

@@ -151,7 +151,7 @@
 | 古诗 | hanzi-study `poem/data.js` + `audio/` | 解析 data.js(验证过非 title 字段格式,需按实际字段写解析);音频 mp3 直接拷贝;标注难度分级 | `poems.json` + audio 目录 |
 | 英语词库 | joye `words.ts` + `SentencesPage.tsx` 内嵌句型数组 | ts→JSON 转换;191 词(音标/释义/例句/分类)+ 109 句型(分类/emoji) | `english_words.json` / `english_sentences.json` |
 | 口算/应用题 | 无需资产 | 生成器规则(见 3-P0-2) | 程序生成 |
-| 宠物素材 | monorepo 现成(65 帧+240 街机图) | 不动 | — |
+| 宠物素材 | monorepo 现成(65 帧；240 街机图已于 2026-10-13 随单机游戏下线删除) | 不动 | — |
 | TTS 音素(可选 P1) | 自录或收购 | 63 个声韵母真人音频 ≤30KB/个 | `assets/learning/pinyin_audio/` |
 
 **版权红线**:hanzi-study 为 MIT;StudyWord 仓库无 License(只用其字表,字表本身无著作权);joye 无 License(数据结构参考,数据重建或联系作者);ziyin-island Apache-2.0(可引用代码,保留声明)。
@@ -298,7 +298,8 @@ daily_stats(date, module, minutes, itemsDone, correctRate, coinsEarned, expEarne
 | 资产 | 估算 | 削减策略(超 150MB 时启用) |
 |---|---|---|
 | 代码+依赖(现有基线) | ~40MB | R8 混淆+资源收缩(默认开) |
-| 宠物素材(87 帧+240 街机图+音频) | ~15MB | 不动(现成) |
+| 宠物素材(87 帧+音频；街机图已删) | ~15MB | 不动(现成) |
+| QQPet 游戏厅(vendor 素材 347MB + Ruffle wasm) | ~360MB | 2026-10-13 起合并进 app-host，超预算为既定决策（零服务器硬约束的代价）；若安装受阻再议分包 |
 | 字体:缝合怪像素(全 CJK) | 5-12MB | 子集化(fonttools 只留 3500 常用字,可压至 ~3MB) |
 | 识字数据+笔顺 JSON(3400 字) | 8-20MB | 笔顺只打包 L1-L3 的 1200 字(L4 字不描红只认读) |
 | 古诗音频 114 首 mp3 | 20-30MB | 重编码 64kbps 单声道(儿童朗读够用,约减半) |
