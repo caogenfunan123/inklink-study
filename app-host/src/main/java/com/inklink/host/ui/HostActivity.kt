@@ -197,14 +197,13 @@ class HostActivity : AppCompatActivity() {
         }
     }
 
-    /** 宠物外观切换：矢量旧形象 / 复古像素 / PNG素材 / 街机素材（业务零改动，仅渲染层切换）。 */
+    /** 宠物外观切换：矢量旧形象 / 复古像素 / PNG素材 / 场景宠（业务零改动，仅渲染层切换）。 */
     private fun showPetAppearance() {
         val current = com.inklink.host.state.PetRenderMode.get(this)
         val options = arrayOf(
             "原版卡通（矢量）",
             "复古像素（掌机风）",
             "像素素材（PNG 宠物）",
-            "街机像素（大屏素材）",
             "场景宠（云朵 LCD）"
         )
         AlertDialog.Builder(this)
@@ -218,7 +217,6 @@ class HostActivity : AppCompatActivity() {
                         com.inklink.host.state.PetRenderMode.PIXEL_PNG -> "已切换为像素素材（缺帧自动回退程序化像素）"
                         com.inklink.host.state.PetRenderMode.PIXEL_RETRO -> "已切换为复古像素宠物"
                         com.inklink.host.state.PetRenderMode.VECTOR_OLD -> "已切换回原版卡通"
-                        com.inklink.host.state.PetRenderMode.PIXEL_ARCADE_SPRITE -> "已切换为街机像素素材"
                         com.inklink.host.state.PetRenderMode.PIXEL_SCENE -> "已切换为云朵 LCD 场景宠"
                     },
                     Toast.LENGTH_SHORT

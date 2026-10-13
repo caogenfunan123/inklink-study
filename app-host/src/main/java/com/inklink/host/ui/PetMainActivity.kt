@@ -63,7 +63,6 @@ class PetMainActivity : AppCompatActivity() {
     private val petAudioFeedback: com.inklink.host.audio.PetAudioFeedback by lazy {
         com.inklink.host.audio.PetAudioFeedback(this)
     }
-    private lateinit var petMiniGameManager: com.inklink.host.game.PetMiniGameManager
     private lateinit var taskQueueManager: com.inklink.host.task.TaskQueueManager
     private lateinit var petSpriteView: PetSpriteView
     private lateinit var konfettiView: KonfettiView
@@ -145,7 +144,6 @@ class PetMainActivity : AppCompatActivity() {
         pinSecurityManager = PinSecurityManager(this)
         soundEffectManager = SoundEffectManager(this)
         localTtsManager.addProbeListener(probeListener)
-        petMiniGameManager = com.inklink.host.game.PetMiniGameManager(this)
         taskQueueManager = com.inklink.host.task.TaskQueueManager(this)
 
         initViews()
@@ -236,6 +234,8 @@ class PetMainActivity : AppCompatActivity() {
         btnBag = findViewById(R.id.btnBag)
         btnShop = findViewById(R.id.btnShop)
         btnGames = findViewById(R.id.btnGames)
+        // QQPet 游戏厅入口待接入（third_party/qqpet 合并后恢复显示并跳转 QQPetActivity）
+        btnGames.visibility = View.GONE
         btnFriends = findViewById(R.id.btnFriends)
         btnChat = findViewById(R.id.btnChat)
         btnAdmin = findViewById(R.id.btnAdmin)
@@ -504,17 +504,6 @@ class PetMainActivity : AppCompatActivity() {
             true
         }
 
-        // 游戏中心：保留猜拳/翻牌/转盘（阶段五，赚金币闭环）
-        btnGames.setOnClickListener {
-            HapticUtil.tap(it)
-            speakGuide("游戏中心：包含猜拳、记忆翻牌与幸运转盘，每日通关赚取金币。")
-            showMiniGameDialog()
-        }
-        btnGames.setOnLongClickListener {
-            speakGuide("游戏中心：包含猜拳、记忆翻牌与幸运转盘，每日通关赚取金币。")
-            true
-        }
-
         // 好友圈：跨设备互玩对战与串门（阶段六）
         btnFriends.setOnClickListener {
             HapticUtil.tap(it)
@@ -645,7 +634,7 @@ class PetMainActivity : AppCompatActivity() {
 
     /** 受控端直接选择宠物外观；仅改变渲染偏好，不触碰养成数据。 */
     private fun showAppearanceDialog() {
-        val options = arrayOf("原版卡通（矢量）", "复古像素（掌机风）", "像素素材（PNG 宠物）", "街机像素（大屏素材）", "场景宠（云朵 LCD）")
+        val options = arrayOf("原版卡通（矢量）", "复古像素（掌机风）", "像素素材（PNG 宠物）", "场景宠（云朵 LCD）")
         val current = com.inklink.host.state.PetRenderMode.get(this).ordinal
         var dialog: androidx.appcompat.app.AlertDialog? = null
         dialog = MaterialAlertDialogBuilder(this)
@@ -659,7 +648,6 @@ class PetMainActivity : AppCompatActivity() {
                         com.inklink.host.state.PetRenderMode.PIXEL_PNG -> "像素素材已开启，缺帧自动回退程序化像素"
                         com.inklink.host.state.PetRenderMode.PIXEL_RETRO -> "像素模式已开启"
                         com.inklink.host.state.PetRenderMode.VECTOR_OLD -> "原版卡通已恢复"
-                        com.inklink.host.state.PetRenderMode.PIXEL_ARCADE_SPRITE -> "街机像素素材已开启"
                         com.inklink.host.state.PetRenderMode.PIXEL_SCENE -> "云朵 LCD 场景宠已开启"
                     }
                 )
@@ -934,301 +922,6 @@ class PetMainActivity : AppCompatActivity() {
             position = Position.Relative(0.5, 0.5)
         )
         konfettiView.start(party)
-    }
-
-    private fun showMiniGameDialog() {
-        speakGuide("游戏中心有三种小游戏：石头剪刀布、记忆翻牌和幸运转盘，每天前8局赢金币，快来试试吧！")
-        val options = arrayOf("石头剪刀布 ✊✋✌️", "4x4 记忆翻牌 🎴", "幸运转盘 🎡")
-        MaterialAlertDialogBuilder(this)
-            .setTitle("宠物小游戏")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> playRpsGame()
-                    1 -> playMemoryMatchGame()
-                    2 -> playSpinWheelGame()
-                }
-            }
-            .setNegativeButton("取消", null)
-            .show()
-    }
-
-    /** 弹层内通用弹簧入场（game-juice：Overshoot 弹出 + 触觉）。 */
-    private fun bounceIn(v: View) {
-        v.scaleX = 0.3f
-        v.scaleY = 0.3f
-        v.alpha = 0f
-        v.animate().scaleX(1f).scaleY(1f).alpha(1f)
-            .setDuration(320)
-            .setInterpolator(android.view.animation.OvershootInterpolator(2.2f))
-            .start()
-    }
-
-    /** 手部上下抖动（猜拳 suspense）：remaining 个完整起落周期，结束后回落原位。 */
-    private fun shakeHand(v: View, remaining: Int, amp: Float = 56f) {
-        if (remaining <= 0) {
-            v.translationY = 0f
-            return
-        }
-        v.animate().translationY(-amp).setDuration(110)
-            .setInterpolator(android.view.animation.DecelerateInterpolator())
-            .withEndAction {
-                v.animate().translationY(0f).setDuration(110)
-                    .setInterpolator(android.view.animation.AccelerateInterpolator())
-                    .withEndAction { shakeHand(v, remaining - 1, amp * 0.85f) }
-                    .start()
-            }
-            .start()
-    }
-
-    /** 猜拳揭晓：弹簧定格 + 结果横幅 + 获胜全屏礼花/金币音。 */
-    private fun playRpsGame() {
-        val (dialog, root) = buildSheet("✊ 石头剪刀布", "和TA出拳，获胜赚金币（每日前8局有奖）")
-        val arena = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(0, 24, 0, 8)
-        }
-        val myHand = TextView(this).apply {
-            text = "✊"; textSize = 64f; setPadding(40, 0, 40, 0)
-        }
-        val vs = TextView(this).apply {
-            text = "⚡"; textSize = 28f; setTextColor(Color.parseColor("#FFA726"))
-        }
-        val petHand = TextView(this).apply {
-            text = "✊"; textSize = 64f; setPadding(40, 0, 40, 0)
-        }
-        arena.addView(myHand); arena.addView(vs); arena.addView(petHand)
-        root.addView(arena)
-        val tvResult = TextView(this).apply {
-            text = "选一个出手势！"
-            textSize = 16f
-            gravity = Gravity.CENTER
-            setTextColor(Color.parseColor("#616161"))
-            setPadding(0, 8, 0, 20)
-        }
-        root.addView(tvResult)
-
-        var playing = false
-        val handEmoji = mapOf(
-            com.inklink.host.game.PetMiniGameManager.Choice.ROCK to "✊",
-            com.inklink.host.game.PetMiniGameManager.Choice.SCISSORS to "✌️",
-            com.inklink.host.game.PetMiniGameManager.Choice.PAPER to "✋"
-        )
-        for ((choice, emoji) in handEmoji) {
-            val btn = MaterialButton(this).apply {
-                text = "$emoji ${choice.name}"
-                isAllCaps = false
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins(8, 6, 8, 6) }
-                setOnClickListener {
-                    if (playing) return@setOnClickListener
-                    playing = true
-                    HapticUtil.tap(this)
-                    myHand.text = emoji
-                    tvResult.text = "石头——剪刀——布！"
-                    soundEffectManager.play(SoundEffectManager.Sfx.PLAY)
-                    // 双方手抖动 3 次后定格
-                    shakeHand(myHand, 3)
-                    shakeHand(petHand, 3)
-                    val (botChoice, result) = petMiniGameManager.playRockPaperScissors(choice)
-                    petHand.postDelayed({
-                        myHand.translationY = 0f
-                        petHand.translationY = 0f
-                        petHand.text = handEmoji[botChoice] ?: "✊"
-                        bounceIn(myHand); bounceIn(petHand)
-                        val (verdictText, color) = when (result) {
-                            com.inklink.host.game.PetMiniGameManager.Result.WIN -> "🎉 你赢了！" to "#43A047"
-                            com.inklink.host.game.PetMiniGameManager.Result.LOSE -> "😆 TA赢了！" to "#E53935"
-                            else -> "🤝 平局！" to "#FB8C00"
-                        }
-                        tvResult.text = verdictText
-                        tvResult.setTextColor(Color.parseColor(color))
-                        if (result == com.inklink.host.game.PetMiniGameManager.Result.WIN) {
-                            if (petMiniGameManager.canGainRewardToday()) {
-                                petStateManager.addReward(coin = 10, exp = 15)
-                                petMiniGameManager.recordGamePlayed()
-                                soundEffectManager.play(SoundEffectManager.Sfx.COIN)
-                                playStarParticles()
-                                floatText("+10 🪙 +15 EXP")
-                                localTtsManager.speak("你赢啦，获得10金币和15经验")
-                            } else {
-                                PixelToast.show(rootContainer, "获胜！(今日防刷上限，无奖励)")
-                            }
-                            petSpriteView.fireTrigger("EXCITED")
-                            updatePetUi(petStateManager.getActivePet())
-                        } else if (result == com.inklink.host.game.PetMiniGameManager.Result.LOSE) {
-                            petSpriteView.fireTrigger("ANNOY")
-                        }
-                        playing = false
-                    }, 700L)
-                }
-            }
-            root.addView(btn)
-        }
-        dialog.show()
-    }
-
-    /** 4x4 记忆翻牌：真配对玩法，翻牌 3D 动画 + 配对弹簧 + 全对礼花。 */
-    private fun playMemoryMatchGame() {
-        val (dialog, root) = buildSheet("🎴 4x4 记忆翻牌", "翻开两张相同的即可配对，全部配对有奖")
-        val faces = listOf("🐱", "🐶", "🐰", "🐧", "🐹", "🐼", "🦊", "🐲")
-        val deck = (faces + faces).shuffled()
-        val grid = android.widget.GridLayout(this).apply {
-            columnCount = 4
-            rowCount = 4
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { gravity = Gravity.CENTER }
-        }
-        val cards = ArrayList<TextView>()
-        var firstIndex = -1
-        var lockBoard = false
-        var matchedPairs = 0
-        val size = (resources.displayMetrics.widthPixels * 0.19f).toInt()
-        val cardBack = (0..15).map { if (it % 2 == 0) Color.parseColor("#5C6BC0") else Color.parseColor("#7E57C2") }
-
-        val tvTip = TextView(this).apply {
-            text = "已配对 0/8"
-            textSize = 14f
-            gravity = Gravity.CENTER
-            setTextColor(Color.parseColor("#616161"))
-            setPadding(0, 16, 0, 8)
-        }
-
-        val onCardTap: (Int) -> Unit = fun(index: Int) {
-            val card = cards[index]
-            if (lockBoard || card.text != "❓") return
-            HapticUtil.tap(card)
-            // 翻面：rotateX 90° 换字再翻回
-            card.animate().rotationX(90f).setDuration(120).withEndAction {
-                card.text = deck[index]
-                card.setTextColor(Color.parseColor("#212121"))
-                card.setBackgroundColor(Color.parseColor("#FFFFFF"))
-                card.animate().rotationX(0f).setDuration(120).start()
-            }.start()
-            if (firstIndex < 0) {
-                firstIndex = index
-                return
-            }
-            lockBoard = true
-            val a = firstIndex
-            firstIndex = -1
-            if (deck[a] == deck[index]) {
-                matchedPairs++
-                tvTip.text = "已配对 $matchedPairs/8"
-                soundEffectManager.play(SoundEffectManager.Sfx.EAT)
-                cards[index].postDelayed({
-                    bounceIn(card); bounceIn(cards[a])
-                    lockBoard = false
-                    if (matchedPairs == 8) {
-                        // 全对：结算
-                        if (petMiniGameManager.canGainRewardToday()) {
-                            petStateManager.addReward(coin = 15, exp = 20)
-                            petMiniGameManager.recordGamePlayed()
-                            soundEffectManager.play(SoundEffectManager.Sfx.COIN)
-                            playStarParticles()
-                            floatText("+15 🪙 +20 EXP")
-                            PixelToast.showLong(rootContainer, "记忆翻牌大成功！获得 15 金币与 20 经验")
-                            localTtsManager.speak("记忆翻牌全部配对成功，获得15金币和20经验")
-                            petSpriteView.fireTrigger("EXCITED")
-                        } else {
-                            PixelToast.show(rootContainer, "通关！(今日奖励已达上限)")
-                        }
-                        updatePetUi(petStateManager.getActivePet())
-                        tvTip.text = "🎉 全部配对完成！"
-                    }
-                }, 260L)
-            } else {
-                // 不匹配：短暂亮出后扣回
-                cards[index].postDelayed({
-                    for (j in intArrayOf(a, index)) {
-                        cards[j].animate().rotationX(90f).setDuration(120).withEndAction {
-                            cards[j].text = "❓"
-                            cards[j].setTextColor(Color.parseColor("#ECEFF1"))
-                            cards[j].setBackgroundColor(cardBack[j])
-                            cards[j].animate().rotationX(0f).setDuration(120).start()
-                        }.start()
-                    }
-                    lockBoard = false
-                }, 650L)
-            }
-        }
-
-        for (i in deck.indices) {
-            val card = TextView(this).apply {
-                text = "❓"
-                textSize = 30f
-                gravity = Gravity.CENTER
-                setTextColor(Color.parseColor("#ECEFF1"))
-                setBackgroundColor(cardBack[i])
-                val m = 10
-                layoutParams = android.widget.GridLayout.LayoutParams().apply {
-                    width = size; height = size
-                    setMargins(m, m, m, m)
-                }
-                setOnClickListener { onCardTap(i) }
-            }
-            cards.add(card)
-            grid.addView(card)
-        }
-        root.addView(grid)
-        root.addView(tvTip)
-        dialog.show()
-    }
-
-    /** 幸运转盘：弹簧按钮启动，转盘 Decelerate 长缓动落针，中奖金币音+礼花。 */
-    private fun playSpinWheelGame() {
-        val (dialog, root) = buildSheet("🎡 幸运转盘", "一转定金币，每日前8局有奖")
-        val wheel = com.inklink.host.ui.view.SpinWheelView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(
-                (resources.displayMetrics.widthPixels * 0.72f).toInt(),
-                (resources.displayMetrics.widthPixels * 0.72f).toInt()
-            ).apply { gravity = Gravity.CENTER }
-        }
-        root.addView(wheel)
-        val btnSpin = MaterialButton(this).apply {
-            text = "🎯 开始转动！"
-            textSize = 16f
-            isAllCaps = false
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { setMargins(8, 20, 8, 8) }
-            setOnClickListener {
-                HapticUtil.tap(this)
-                isEnabled = false
-                soundEffectManager.play(SoundEffectManager.Sfx.PLAY)
-                val (coin, exp) = petMiniGameManager.spinWheel()
-                val segment = when (coin) {
-                    10 -> 0; 30 -> 1; 60 -> 2; else -> 3
-                }
-                wheel.spinTo(segment) {
-                    isEnabled = true
-                    val rewardable = petMiniGameManager.canGainRewardToday()
-                    if (rewardable) {
-                        petStateManager.addReward(coin = coin, exp = exp)
-                        petMiniGameManager.recordGamePlayed()
-                    }
-                    soundEffectManager.play(if (coin >= 60) SoundEffectManager.Sfx.LEVEL_UP else SoundEffectManager.Sfx.COIN)
-                    if (coin >= 60) {
-                        playHeartParticles()
-                        playStarParticles()
-                        petSpriteView.fireTrigger("EXCITED")
-                    }
-                    floatText("+$coin 🪙 +$exp EXP")
-                    localTtsManager.speak(if (rewardable) "转盘开奖，获得${coin}金币，${exp}经验" else "今天的小游戏奖励领完啦")
-                    PixelToast.show(
-                        rootContainer,
-                        if (rewardable) "转盘开奖！获得 $coin 金币与 $exp 经验"
-                        else "转盘抽中 $coin 金币 (今日奖励已达上限)"
-                    )
-                    updatePetUi(petStateManager.getActivePet())
-                }
-            }
-        }
-        root.addView(btnSpin)
-        bounceIn(btnSpin)
-        dialog.show()
     }
 
     /** 通用底部卡片弹层容器（规范：弹窗卡片化，参考 Linguin 商品网格）。 */

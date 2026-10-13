@@ -9,8 +9,7 @@ tools/
 ├── learning/     # 学习内容 JSON 生成（字库/拼音/古诗/英语）
 ├── pet_sprite/   # 宠物精灵图流水线（程序化出图→抠底→配准→成品）
 ├── pet_blob/     # 云朵宠动作帧 + 250x250 场景底图
-├── pet_audio/    # 10 条 chiptune 音效合成
-└── pet_arcade/   # 街机 240 帧白底图批量转换
+└── pet_audio/    # 10 条 chiptune 音效合成
 ```
 
 ## 各管线
@@ -44,14 +43,9 @@ tools/
 - 10 条配方：alert_call/alert_notify/alert_warn/sound_ack（系统）+ pet_feed/pet_touch/pet_happy/pet_hungry/pet_sleep/pet_wakeup（宠物）
 - 用法：`generate_sfx.py [--deploy] [--check DIR]`；--deploy 拷入 res/raw；--check 供 CI 同源校验
 
-### pet_arcade/convert_arcade.py
-
-- 输入白底 AI 生成图；8-邻域 flood-fill 从四边抠底（HSV 亮度+饱和度判据防误抠）→ 保留面积 ≥200px 连通域 → 输出 256x256 RGBA（alpha 仅 0/255）
-- 用法：`convert_arcade.py <src_dir> <out_dir>`，产物进 `assets/pixel_arcade/<物种>/`
-
 ## 规范
 
-- 一切成品必须能被对应契约测试通过（PetSpriteAssetContractTest/PetArcadeAssetContractTest/RawSoundContractTest），契约明细见 INTERFACES.md 第 8 节
+- 一切成品必须能被对应契约测试通过（PetSpriteAssetContractTest/RawSoundContractTest），契约明细见 INTERFACES.md 第 8 节
 - 新增素材先改脚本配方（可复现），人工只做终检拷贝；手绘/外部图必须先过抠底与归一化流水线
 - 中间产物不入库；_manifest.json 台账与 preview 审阅图可入库
-- Python 依赖：numpy（pet_audio）、Pillow（pet_blob/pet_arcade/pet_sprite）
+- Python 依赖：numpy（pet_audio）、Pillow（pet_blob/pet_sprite）

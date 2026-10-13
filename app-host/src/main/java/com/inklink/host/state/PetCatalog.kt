@@ -27,7 +27,7 @@ object PetCatalog {
 
     /** 蛋/物种（14 种，共骨架+三件套贴片+LUT；2026-08-31 附录A追加 frog/pig/owl/snake）。
      *  2026-08-31 补 7 个 dongwu 素材扩展物种（bear/bird/fish/mouse/tiger/turtle/wolf），
-     *  商店可购买；矢量/复古/PNG 档回退 cat 兜底，街机素材档(PIXEL_ARCADE_SPRITE)直接渲染。 */
+     *  商店可购买；矢量/复古/PNG 档回退 cat 兜底。 */
     data class SpeciesDef(val code: String, val name: String, val emoji: String, val eggPrice: Int)
 
     val SPECIES: List<SpeciesDef> = listOf(

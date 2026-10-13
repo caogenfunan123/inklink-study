@@ -346,11 +346,6 @@ class PetSpriteView @JvmOverloads constructor(
             return
         }
 
-        if (renderMode == com.inklink.host.state.PetRenderMode.PIXEL_ARCADE_SPRITE) {
-            drawArcadePet(canvas, w, h)
-            return
-        }
-
         if (renderMode == com.inklink.host.state.PetRenderMode.PIXEL_SCENE) {
             drawScenePet(canvas, w, h)
             return
@@ -1276,58 +1271,6 @@ class PetSpriteView @JvmOverloads constructor(
         // ---- 头顶状态符号（饿/脏/病，像素） ----
         if (hungry) pxRect(64, 8, 6, 6, pxPalette[3])
         if (sick) pxRect(64, 8, 6, 6, pxPalette[9])
-    }
-
-    // ==================== PIXEL_ARCADE_SPRITE 街机素材模式（dongwu 图集） ====================
-
-    /** 每状态 3 帧动画：帧时长 400ms，01→02→03→01 循环（README 约定，2026-08-31 由 200ms 调慢）。 */
-    private val arcadeCache = object : LruCache<String, Bitmap>(8 * 1024 * 1024) {
-        override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
-    }
-
-    private fun loadArcadeBitmap(code: String, state: String, frame: Int): Bitmap? {
-        // 素材文件命名两位数帧号（如 cat_idle_01.png），与 PetArcadeAssetContractTest 闭集严格一致
-        val path = "pixel_arcade/$code/${code}_${state}_${frame.toString().padStart(2, '0')}.png"
-        arcadeCache.get(path)?.let { return it }
-        return runCatching {
-            context.assets.open(path).use { ins ->
-                val opts = BitmapFactory.Options().apply { inScaled = false }
-                BitmapFactory.decodeStream(ins, null, opts)?.also { bmp ->
-                    if (bmp.width != 256 || bmp.height != 256) {
-                        Log.e("PetSpriteArcade", "素材违反256契约: $path size=${bmp.width}x${bmp.height}")
-                    }
-                    arcadeCache.put(path, bmp)
-                }
-            }
-        }.getOrNull()
-    }
-
-    /**
-     * 街机素材渲染：精确状态3帧循环 → idle 回退（sad/annoy/sick）→ 整只回退 PIXEL_PNG。
-     * 物种无素材 / EGG（蛋形态程序化）→ 直接回退。素材为完整 256×256 角色，
-     * CUB 及以上全生命周期直接渲染，不做幼年缩小（区别于 96×96 程序化像素的阶段缩放）。
-     * 256×256 整数倍放大居中，硬边无插值。
-     */
-    private fun drawArcadePet(canvas: Canvas, w: Float, h: Float) {
-        val code = def.code
-        if (lifeStage == "EGG" || code !in com.inklink.host.state.PetArcadeMap.SUPPORTED) {
-            drawPngPet(canvas, w, h)
-            return
-        }
-        val state = pixelState()
-        val fileState = com.inklink.host.state.PetArcadeMap.STATE_FILE[state]
-            ?: com.inklink.host.state.PetArcadeMap.FALLBACK_STATE[state]
-            ?: "idle"
-        // 3 帧循环：400ms/帧，pngSwap 累积节拍（复用既有更新节拍，不在本模式额外计时）
-        val frame = (floor(pngSwap / 0.4f).toInt() % com.inklink.host.state.PetArcadeMap.FRAMES_PER_STATE) + 1
-        val bmp = loadArcadeBitmap(code, fileState, frame) ?: run { drawPngPet(canvas, w, h); return }
-
-        drawRetroBackdrop(canvas, w, h)
-        // 256×256 整数倍放大 + 余数居中（与 PIXEL_PNG 的 A.4 同规则）
-        val s = max(1f, floor(min(w, h) / 256f))
-        val left = (w - 256f * s) / 2f
-        val top = (h - 256f * s) / 2f
-        canvas.drawBitmap(bmp, null, RectF(left, top, left + 256f * s, top + 256f * s), pngPaint)
     }
 
     // ==================== PIXEL_SCENE 云朵 LCD 场景宠模式（附录C） ====================

@@ -17,7 +17,7 @@ app-host/src/main/java/com/inklink/host/
 │   ├── PetDecayEngine.kt    # 双时钟衰减 + 浮点余量防丢帧 + 后台休眠豁免
 │   ├── PetClock.kt          # 前后台时钟翻转（onResume/onPause 驱动）
 │   ├── PetCatalog.kt        # 商品唯一数据源：21物种/7道具/4装饰/3场景/每日目标
-│   ├── PetArcadeMap.kt / PetSceneMap.kt / PetSpriteResMap.kt  # 素材映射+三级回退
+│   ├── PetSceneMap.kt / PetSpriteResMap.kt  # 素材映射+三级回退
 │   ├── GpsTreasureHunter.kt # GPS寻宝（80m位移+60s冷却）
 │   └── HostScreenState.kt   # Service↔UI 共享状态 + 画面缓存自愈
 ├── pet/PetAiEngine.kt       # 行为树：8-20s决策 虚弱>睡眠>抱怨>性格动作>待机
@@ -26,7 +26,6 @@ app-host/src/main/java/com/inklink/host/
 │   ├── PetDatabase.kt       # v2，inklink_pet.db，主线程查询+破坏性迁移
 │   ├── PetEntities.kt/PetDao.kt        # pet_bag/event_log(环形500)
 │   └── LearnEntities.kt/LearnDao.kt    # learn_progress/wrong_book/daily_stats
-├── game/PetMiniGameManager.kt   # 猜拳/翻牌/转盘判定 + 每日前8局防刷
 ├── friend/FriendRepository.kt   # friends.json + Presence + GameInviteSession
 ├── task/TaskQueueManager.kt     # task_list.json 上限20 淘汰策略
 ├── queue/OfflineEventQueue.kt   # offline_events.json 上限50 FIFO，联网drain
@@ -41,8 +40,8 @@ app-host/src/main/java/com/inklink/host/
 │   ├── HostActivity.kt      # 462行 家长管控后台：二维码/投屏/响铃/传输模式切换
 │   ├── ChatActivity.kt / FriendActivity.kt
 │   ├── learning/            # 8个原生学习 Activity（无 WebView）
-│   └── view/                # PetSpriteView(1519行像素引擎)/PixelSpecies/
-│                            # PixelProgressBarView/SpinWheelView
+│   └── view/                # PetSpriteView(1462行像素引擎)/PixelSpecies/
+│                            # PixelProgressBarView
 └── util/                    # SoundEffectManager(ToneGenerator chiptune)/HapticUtil
 ```
 
@@ -67,7 +66,7 @@ app-host/src/main/java/com/inklink/host/
 - 音频通道：预制 wav(网络指令) 与 chiptune(本地游戏化) 分离；告警 STREAM_ALARM 可打断 TTS
 - 保活：前台服务类型按已授权限动态组合（MICROPHONE/LOCATION，全未授权兜底 DATA_SYNC），Android 14 兼容
 - 素材契约测试（PNG/WAV）在 src/test，改资产必跑
-- 单测 6 类：PetDecayEngineTest/PetGamifyKernelTest/PetLifeLoopTest/PetSpriteAssetContractTest/PetArcadeAssetContractTest/RawSoundContractTest
+- 单测 5 类：PetDecayEngineTest/PetGamifyKernelTest/PetLifeLoopTest/PetSpriteAssetContractTest/RawSoundContractTest
 
 ## 添加新文件
 

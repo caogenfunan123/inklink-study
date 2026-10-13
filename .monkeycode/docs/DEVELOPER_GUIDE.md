@@ -128,9 +128,8 @@ adb install -r app-controller/build/outputs/apk/debug/app-controller-debug.apk
 
 1. `app-host/.../ui/view/PixelSpecies.kt` - 程序化像素调色板与三件套槽位（回退兜底必配）
 2. 精灵帧（可选）：tools/pet_sprite 管线出图 → `res/drawable-nodpi/`；命名 `{species}_{state}.png` 96x96 8bit PNG 质心 (48,48)
-3. 街机帧（可选）：`assets/pixel_arcade/{species}/` 12 张 `{species}_{idle|hungry|happy|sleep}_{01..03}.png` 256x256
-4. `state/PetSpriteResMap.kt` / `PetArcadeMap.kt` - 资源映射；素材缺失走三级回退（PIXEL_PNG → arcade → 程序化）
-5. 跑 `PetSpriteAssetContractTest` / `PetArcadeAssetContractTest` 验契约
+3. `state/PetSpriteResMap.kt` - 资源映射；素材缺失走回退（PIXEL_PNG → 程序化）
+4. 跑 `PetSpriteAssetContractTest` 验契约
 
 ### 新增音效
 
@@ -187,7 +186,6 @@ python tools/learning/build_learning_assets.py
 | SoundEffectManager 遗留缺陷 | CHECKLIST_PET_AUDIO 阶段1末条，待修 |
 | 真机项未验证 | CHECKLIST_PET_AUDIO 阶段8（STREAM_ALARM 实测/弱网/内存巡检等 8 条）、CHECKLIST_PET_SPRITE 阶段6 |
 | app-controller 测试不在 CI | 已不成立：CI 现跑 common/host/controller 三模块单测 |
-| sheep 街机素材缺失 | PetArcadeMap 三级回退兜底，勿删回退逻辑 |
 | Ably ConnectionState 包名 | 用 `io.ably.lib.realtime.ConnectionState`（非 types 包） |
 | 答题三件套易漏 | 2026-10 复盘：识字/拼音两岛错答分支曾锁死课程。新答题页先抄 MathActivity（锁输入+高亮正解+推进索引） |
 | CI 必须含 :common | 2026-10 复盘：GeoFenceManagerTest 多围栏用例因 common 测试不进 CI 而长期隐形失效，已补门禁 |

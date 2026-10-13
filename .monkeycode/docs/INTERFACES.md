@@ -167,7 +167,6 @@ AMR_NB 12.2kbps @8kHz，按住录音松开返回字节 → Base64 进 14 号文�
 | 资产集 | 位置 | 契约 |
 |--------|------|------|
 | 宠物精灵帧 | app-host/res/drawable-nodpi/ | 命名闭集（14 物种 × idle/hungry/happy/sleep [+cat/dog/rabbit blink/idle_a/idle_b] + 19 张 cloud_* + 3 张 scene_*.png 250x250）；96x96 画布、8bit 非隔行 PNG、Alpha 二值化、胸区锚点、帧间质心偏移 ≤2px（PetSpriteAssetContractTest） |
-| 街机帧 | app-host/assets/pixel_arcade/ | 20 物种 × 4 状态(idle/hungry/happy/sleep) × 3 帧(_01.._03) = 240 张；256x256 RGBA 透明底 alpha 仅 0/255（PetArcadeAssetContractTest）；sheep 无素材走三级回退 |
 | 音效 | app-host/res/raw/ | 文件集合与 `SoundProtocol.RAW_NAMES` 严格相等（10 个）；16bit 单声道 44.1kHz；时长 0.5-1.5s；峰值 -1dBFS；无直流；首静音 ≤5ms 尾静音 ≤30ms（RawSoundContractTest） |
 | 学习数据 | app-host/assets/learning/ | 6 个 JSON：hanzi.json(3024 字，字段 char/pinyin/phrase/sentence/level)、poems.json(114 首)、pinyin.json(474 音节)、pinyin_questions.json(250 配对题)、english_words.json/english_sentences.json（未接线）。消费方仅 LearningManager |
 
@@ -179,7 +178,6 @@ AMR_NB 12.2kbps @8kHz，按住录音松开返回字节 → Base64 进 14 号文�
 | tools/pet_audio/generate_sfx.py | `generate_sfx.py [--deploy] [--check DIR]` | numpy 加法合成（固定种子 20260810 可复现）→ `tools/pet_audio/out/*.wav`；--deploy 拷入 res/raw；--check 供 CI 同源校验 |
 | tools/pet_sprite/sprite_pipeline.py | 见 tools/pet_sprite/README.md | assets_draft/ 草稿 → out/ 96x96 成品 + _manifest.json；终检后人工拷入 drawable-nodpi |
 | tools/pet_blob/deploy_assets.py | `python deploy_assets.py` | preview/raw 帧与场景 → drawable-nodpi 19 张 cloud_* + 3 张 scene_* |
-| tools/pet_arcade/convert_arcade.py | `convert_arcade.py <src_dir> <out_dir>` | 白底 AI 图 → flood-fill 抠底 + 连通域清噪 → 256x256 RGBA 到 assets/pixel_arcade/ |
 | tools/pet_blob/make_scenes.py 等 | 见脚本头部注释 | 生成审阅 preview 图，不直接落库 |
 
 ## 10. 新增码位登记规则

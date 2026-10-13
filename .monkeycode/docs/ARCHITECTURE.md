@@ -53,19 +53,18 @@
 ├── app-host                        // Application，孩子端（宠物+学习+管控三合一）
 │   ├── service/InkForegroundService.kt // 1216行，全业务唯一真相源：消息路由/GPS/围栏/语音/响铃/任务队列/宠物结算
 │   ├── state                       // PetStateManager(979行状态机)/PetDecayEngine/PetClock/PetCatalog/
-│   │                               // PetArcadeMap/PetSceneMap/GpsTreasureHunter/HostScreenState
+│   │                               // PetSceneMap/GpsTreasureHunter/HostScreenState
 │   ├── pet/PetAiEngine             // 行为树：8-20s随机空闲决策（虚弱>睡眠>抱怨>性格动作>待机）
 │   ├── learning/LearningManager    // 495行单例：出题/结算/落库/上报47，艾宾浩斯+护眼+金币上限
 │   ├── data                        // Room：PetDatabase v2(inklink_pet.db) pet_bag/event_log/learn_progress/
 │   │                               // wrong_book/daily_stats；PetDao/LearnDao
-│   ├── game/PetMiniGameManager     // 猜拳/翻牌/转盘判定 + 每日前8局防刷
 │   ├── friend                      // FriendRepository(好友落盘)/GameInviteSession(远程对战)
 │   ├── task/queue                  // TaskQueueManager(task_list.json上限20)/OfflineEventQueue(50条FIFO)
 │   ├── tts/audio                   // LocalTtsManager(中英多引擎)/PetTtsGate(单例门控)/RawSoundPlayer(10wav)
 │   ├── security                    // PinSecurityManager(EncryptedSP加盐哈希/5错锁2min/HMAC防重放)
-│   ├── ui                          // PetMainActivity(2212行Launcher)/HostActivity(家长管控后台)/Chat/Friend
+│   ├── ui                          // PetMainActivity(1918行Launcher)/HostActivity(家长管控后台)/Chat/Friend
 │   ├── ui.learning                 // LearningHub/Hanzi/Pinyin/Poem/Math/RestScreen/WrongBook/SchulteGrid
-│   ├── ui.view                     // PetSpriteView(1519行像素引擎)/PixelSpecies/PixelProgressBarView/SpinWheelView
+│   ├── ui.view                     // PetSpriteView(1462行像素引擎)/PixelSpecies/PixelProgressBarView
 │   └── receiver                    // BootReceiver(开机自启)/AlarmReceiver(60s自愈)/PetWakeupReceiver(4h促活)
 └── app-controller                  // Application，家长端（无 Service/Room，逻辑寄生于 Application 进程）
     ├── InkControllerApplication    // 473行：消息route()分发、多设备聚合、语音发起/挂断、告警通知
