@@ -1,0 +1,71 @@
+name: 问题反馈
+description: 宠物显示异常、功能出错、崩溃等问题
+labels: [bug]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 一两句话说清楚出了什么问题。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际现象
+      description: 你看到了什么。进程、窗口、存档状态等你查到的情况都可以写。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 启动 QQPet，确认宠物正常显示
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 你认为正常情况下应该怎样。
+    validations:
+      required: true
+  - type: textarea
+    id: cause
+    attributes:
+      label: 怀疑原因
+      description: 选填。如果你看过代码或做过排查，写下你的判断和建议。
+  - type: dropdown
+    id: platform
+    attributes:
+      label: 平台
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Android
+        - 鸿蒙
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: 系统版本
+      placeholder: 例如 Windows 11 26200.9457
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: QQPet 版本
+      placeholder: 例如 0.6.2
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 截图或日志
+      description: 选填。可以直接拖图片进来。

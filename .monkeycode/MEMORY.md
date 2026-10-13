@@ -78,3 +78,15 @@ Entries discovered by the Agent during task execution should follow this format:
   - 音频与安全：宠物互动音效/TTS 必须绑定 `STREAM_MUSIC`，强控告警必须绑定 `STREAM_ALARM` 并强行打断 TTS；高危指令校验 HMAC-SHA256 与 +-60s 防重放时间窗
   - 规范基准文档：详细设计与任务拆解见 `.monkeycode/specs/pet-system/design.md`
 
+
+[QQPet vendor 引入与私有化口径]
+- Date: 2026-10-13
+- Context: Discovered by Agent while 执行"qqpet 整仓并入"任务（用户决策：仅个人学习游玩，不分发不商用）
+- Category: Operations & Deployment / Build Methods / Environment Configuration
+- Instructions:
+  - inklink-study 已于 2026-10-13 转 **private**（走 vendor 路线的前提：私有使用不触发 GPL-3.0 分发义务；腾讯素材不再外流）。若未来转公开或对外分发 APK，必须先整体按 GPL-3.0 开源并移除 resources/pet 素材
+  - third_party/qqpet 整仓 vendor 自 AnkioTomas/qqpet@db7cf74（快照式，无历史），素材 329MB/8058 文件走本仓库 LFS（根 .gitattributes third_party/qqpet/resources/pet/**），provenance 见 third_party/qqpet/VENDORED.md
+  - QQPet 是独立 App（net.ankio.qqpet，Gradle 8.13/AGP 8.9.3/Kotlin 2.3.0），与 InkLink 双端零耦合；上游升级：上游 clone + git lfs pull → 覆盖目录（保留 VENDORED.md）→ 更新 commit 号
+  - CI（android.yml 单 job 顺序追加）：QQPet web 资产 `npm ci && npm run typecheck && npm run build:android-web`，再 android/gradlew assembleRelease，复用 keystore/inklink-release.keystore + INKLINK_* secrets 签名，产物 dist/QQPet-release.apk，Release 共三 APK
+  - LFS 带宽保护：job 首步 actions/cache 缓存 .git/lfs（key qqpet-lfs-v1，手工升级版本号）；checkout lfs: true
+  - .gitignore 坑：`**/android/gradlew`、`*.jar`、`**/build/` 会误杀 vendor 文件，已在根 .gitignore 追加 !third_party/qqpet/... 否定规则（新增 vendor 目录时先跑 `find third_party -type f | git check-ignore --stdin` 排查）

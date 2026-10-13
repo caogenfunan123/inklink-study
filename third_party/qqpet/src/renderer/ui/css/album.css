@@ -1,0 +1,12 @@
+.ui-photo {width:500px;padding:8px;box-sizing:content-box}
+.ui-photo .photoImg {width:500px;height:350px;display:block}
+.ui-photo .photoBar {padding-top:6px;font-size:13px;color:#8a5a2b}
+.album {width:100%;height:100%}
+.album .albumTip {height:30px;color:#f1ab65;font-weight:700;font-size:16px}
+.album .albumGrid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-content:start;overflow:hidden auto;padding:4px}
+.album .albumItem {padding:6px;border-radius:6px;background:#fff;box-shadow:1px 2px 4px #0002;cursor:pointer;transform:rotate(-1deg)}
+.album .albumItem:nth-child(even) {transform:rotate(1deg)}
+.album .albumItem:hover {transform:scale(1.04)}
+.album .albumImg {width:100%;aspect-ratio:10/7;border-radius:3px;display:block}
+.album .albumCap {padding-top:4px;font-size:11px;color:#8a5a2b;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.album .albumEmpty {color:#c9a27a;font-size:16px}

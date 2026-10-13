@@ -15,6 +15,9 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+      env:
+        # third_party/qqpet 素材为 LFS 指针，本 job 不需要真实素材；跳过 smudge 防止对象缺失时 checkout 失败
+        GIT_LFS_SKIP_SMUDGE: '1'
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -65,9 +68,121 @@ jobs:
         cp app-host/build/outputs/apk/release/*.apk dist/InkLink-Host-release.apk
         cp app-controller/build/outputs/apk/release/*.apk dist/InkLink-Controller-release.apk
 
+    - name: Upload InkLink APKs
+      uses: actions/upload-artifact@v4
+      with:
+        name: inklink-apks
+        path: dist/*.apk
+        if-no-files-found: error
+
+  qqpet:
+    # third_party/qqpet 独立构建（net.ankio.qqpet，vendor 自 AnkioTomas/qqpet，仅个人学习）。
+    # LFS 素材（329MB）由仓库所有者本地推送后本 job 自动恢复；未就位时优雅跳过，
+    # 保证 InkLink 双端构建与 Release 不被 LFS 缺失拖死。
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+    - name: Restore qqpet LFS cache
+      id: lfscache
+      # 缓存 .git/lfs 避免每次跑满 LFS 月带宽配额；素材更新后手工升级 key 为 v2、v3……
+      uses: actions/cache/restore@v4
+      with:
+        path: .git/lfs
+        key: qqpet-lfs-v1
+        restore-keys: qqpet-lfs-
+
+    - name: Checkout
+      uses: actions/checkout@v4
+      env:
+        GIT_LFS_SKIP_SMUDGE: '1'
+
+    - name: Pull LFS assets
+      run: git lfs pull || true
+
+    - name: Guard LFS assets ready
+      id: lfscheck
+      run: |
+        # 目录缺失或仍有指针残留 = 素材未推送/未拉全，跳过本 job 而不是让它红掉
+        # （裸构建会产出无素材的残废 APK，绝不能放行）
+        if [ ! -d third_party/qqpet/resources/pet ] || \
+           grep -rl --include="*.swf" -m1 "^version https://git-lfs" third_party/qqpet/resources/pet >/dev/null 2>&1; then
+          echo "::notice::QQPet LFS 素材未就位（等待所有者本地 git push 上传），本次跳过 QQPet 构建"
+          echo "skip=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Set up Node 22
+      if: steps.lfscheck.outputs.skip != 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: third_party/qqpet/package-lock.json
+
+    - name: Set up JDK 17
+      if: steps.lfscheck.outputs.skip != 'true'
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Build QQPet web assets
+      if: steps.lfscheck.outputs.skip != 'true'
+      working-directory: third_party/qqpet
+      run: npm ci && npm run typecheck && npm run build:android-web
+
+    - name: Build QQPet release APK
+      # 复用 InkLink keystore 签名（包名 net.ankio.qqpet 与 InkLink 双端互不影响），
+      # 签名稳定保证 QQPet 自身可覆盖升级
+      if: steps.lfscheck.outputs.skip != 'true'
+      working-directory: third_party/qqpet/android
+      env:
+        ANDROID_KEYSTORE: ${{ github.workspace }}/keystore/inklink-release.keystore
+        ANDROID_KEYSTORE_PASSWORD: ${{ secrets.INKLINK_STORE_PASSWORD }}
+        ANDROID_KEY_ALIAS: ${{ secrets.INKLINK_KEY_ALIAS }}
+        ANDROID_KEY_PASSWORD: ${{ secrets.INKLINK_KEY_PASSWORD }}
+      run: chmod +x gradlew && ./gradlew assembleRelease --stacktrace
+
+    - name: Upload QQPet APK
+      if: steps.lfscheck.outputs.skip != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: qqpet-apks
+        path: third_party/qqpet/android/app/build/outputs/apk/release/*.apk
+        if-no-files-found: error
+
+    - name: Save qqpet LFS cache
+      # 仅在素材真实就位后保存；key 已存在时 save 只告警不失败（幂等）
+      if: steps.lfscheck.outputs.skip != 'true' && steps.lfscache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: .git/lfs
+        key: qqpet-lfs-v1
+
+  release:
+    needs: [ build, qqpet ]
+    # build 成功即发版；qqpet 素材未就位（skipped）或失败时照发 InkLink 双 APK
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Download InkLink APKs
+      uses: actions/download-artifact@v4
+      with:
+        name: inklink-apks
+        path: dist
+
+    - name: Download QQPet APK (optional)
+      continue-on-error: true
+      uses: actions/download-artifact@v4
+      with:
+        name: qqpet-apks
+        path: dist
+
     - name: Create Release
       uses: softprops/action-gh-release@v2
-      if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/master'
       with:
         tag_name: v1.2.0-${{ github.run_number }}
         name: "InkLink Release v1.2.0-${{ github.run_number }}"
@@ -79,6 +194,7 @@ jobs:
           - AI 行为树（状态抱怨 + 性格加权自主行为 + 情绪台词气泡）
           - 随机事件 / 冒险日记 / 里程碑成就 / 每日目标
           - 三类远程礼物（道具/Buff/装饰）+ 零花钱、43 串门/逗弄子类型、赠礼 ACK
+          - QQPet-release.apk：vendor 自 AnkioTomas/qqpet（net.ankio.qqpet，仅限个人学习，请勿分发）
         files: dist/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

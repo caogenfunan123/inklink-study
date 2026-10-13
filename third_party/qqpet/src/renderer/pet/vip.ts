@@ -1,0 +1,71 @@
+import { resetFish } from './fishing'
+import { info, setInfo } from './store'
+
+const DAY = 86400
+/** PDgrowth at which pink diamond levels 1..7 start. */
+const LEVELS = [0, 100, 300, 800, 1200, 2800, 5800, 99999999]
+
+/** Today's 06:00 (yesterday's before 06:00) in unix seconds: days, and VIP periods, turn over then. */
+export function dayStart(now = Date.now() / 1000): number {
+  const d = new Date(now * 1000)
+  d.setHours(6, 0, 0, 0)
+  if (d.getTime() > now * 1000) d.setDate(d.getDate() - 1)
+  return d.getTime() / 1000
+}
+
+/** Expiry, then level and the growth the next level needs. */
+function settle(today: number): void {
+  const active = info.PDiamondExpirationDate > today
+  setInfo('pinkDiamond', active)
+  if (!active) {
+    setInfo('PDiamondBeginDate', 0)
+    setInfo('PDiamondExpirationDate', 0)
+    setInfo('PDiamondYear', false)
+  }
+  const level = Math.max(LEVELS.filter((g) => info.PDgrowth >= g).length, 1)
+  setInfo('PDiamondLevel', level)
+  setInfo('PDgrowthValue_next', LEVELS[level])
+}
+
+/** Drops the membership now. Growth history stays; the window skin goes gold. */
+export function clearPinkDiamond(): void {
+  setInfo('PDiamondExpirationDate', 0)
+  setInfo('PDiamondBeginDate', 0)
+  settle(dayStart())
+}
+
+/** Opens pink diamond for `days` from today's 06:00, or extends a running one. */
+export function openPinkDiamond(days: number): void {
+  const today = dayStart()
+  const extend = info.pinkDiamond
+  if (extend) {
+    setInfo('PDiamondExpirationDate', info.PDiamondExpirationDate + days * DAY)
+  } else {
+    setInfo('PDiamondExpirationDate', today + days * DAY)
+    setInfo('PDiamondBeginDate', today)
+  }
+  if (days >= 365) setInfo('PDiamondYear', true)
+  setInfo('PDgrowthValue', 20)
+  settle(today)
+  // Opening grants today's pond speed-ups; extending does not refill them.
+  if (!extend) resetFish()
+}
+
+/** Books sweetheart for `days` more, from today's 06:00 when none is booked, and switches it on. */
+export function addSweetHeart(days: number): void {
+  setInfo('sweetHeartOverTime', (info.sweetHeartOverTime || dayStart()) + days * DAY)
+  setInfo('sweetHeart', true)
+}
+
+/** 06:00 accounting: pink diamond growth for the days since it was last counted, and VIP expiry. */
+export function newDay(today: number): void {
+  if (info.pinkDiamond) {
+    setInfo('PDgrowth', info.PDgrowth + (info.PDgrowthValue * (Math.min(today, info.PDiamondExpirationDate) - info.PDiamondBeginDate)) / DAY)
+    setInfo('PDiamondBeginDate', today)
+    settle(today)
+  }
+  if (info.sweetHeartOverTime <= today) {
+    setInfo('sweetHeartOverTime', 0)
+    setInfo('sweetHeart', false)
+  }
+}

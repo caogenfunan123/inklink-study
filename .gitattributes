@@ -1,0 +1,2 @@
+# Vendored QQPet 美术/SWF 素材走 LFS（约 329MB，8058 个文件）
+third_party/qqpet/resources/pet/** filter=lfs diff=lfs merge=lfs -text

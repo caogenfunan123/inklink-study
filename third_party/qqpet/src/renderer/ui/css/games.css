@@ -1,0 +1,8 @@
+.ui-games {min-width:540px;font-size:13px;color:#333;zoom:1.25}
+.ui-games .gameTabs {display:flex;flex-wrap:wrap;gap:6px;padding:4px 0 8px;border-bottom:1px solid #0000001a}
+.ui-games .gameTab {padding:4px 12px;border-radius:12px;background:#0000000d;cursor:pointer}
+.ui-games .gameTab:hover {background:#1989fa3b}
+.ui-games .gameTab.active {background:#1989fa;color:#fff}
+.ui-games .gameList {display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:360px;padding-top:8px;overflow:hidden auto}
+.ui-games .gameItem {padding:8px;border-radius:8px;background:#ffffffb3;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.ui-games .gameItem:hover {background:#1989fa;color:#fff}
