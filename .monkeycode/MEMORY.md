@@ -90,3 +90,15 @@ Entries discovered by the Agent during task execution should follow this format:
   - CI（android.yml 单 job 顺序追加）：QQPet web 资产 `npm ci && npm run typecheck && npm run build:android-web`，再 android/gradlew assembleRelease，复用 keystore/inklink-release.keystore + INKLINK_* secrets 签名，产物 dist/QQPet-release.apk，Release 共三 APK
   - LFS 带宽保护：job 首步 actions/cache 缓存 .git/lfs（key qqpet-lfs-v1，手工升级版本号）；checkout lfs: true
   - .gitignore 坑：`**/android/gradlew`、`*.jar`、`**/build/` 会误杀 vendor 文件，已在根 .gitignore 追加 !third_party/qqpet/... 否定规则（新增 vendor 目录时先跑 `find third_party -type f | git check-ignore --stdin` 排查）
+
+[QQPet vendor 终局口径（公开 + 全量素材）]
+- Date: 2026-10-13
+- Context: Discovered by Agent while 处理 Actions artifact 配额打满与仓库可见性决策
+- Category: Operations & Deployment / Environment Configuration
+- Instructions:
+  - inklink-study 最终为 **public**：私有仓库 artifact/release 存储计入 Free 500MB 账户配额（已因 21 个旧 Release×86MB≈1.8GB 打满）；公开仓库 Actions 免费不计该配额。转公开即解锁 CI 产物上传
+  - 用户明确选择公开全量：GPL-3.0 代码公开合规（LICENSE 随仓）；**腾讯素材（resources/pet）由用户自行决定公开再分发，风险自负**；InkLink Kotlin 代码不受 GPL 传染（独立模块独立 APK，仅同仓共存）
+  - LFS 素材 329MB 由**用户本地机器**推送：本沙盒出网限速 ~12KB/s（多连接并发无效），8 小时以上不可行；本地 `git push` 自动上传 LFS 对象。推送流程见 third_party/qqpet/VENDORED.md
+  - 发版触发改为仅 `v*` tag push 或 workflow_dispatch（普通 push 只跑单测+构建，不建 Release）；tag_name 用 github.ref_name，dispatch 用 v1.2.0-<run_number>
+  - CI 三 job（build/qqpet/release）：qqpet job 用「目录缺失或指针残留」守卫跳过，LFS 未到位时双端构建与（tag）发版零影响；LFS 缓存 restore/save 拆分，素材就位才固化（key qqpet-lfs-v1，手工升级）
+  - .gitignore 坑仍在：`**/android/gradlew`、`*.jar`、`**/build/` 误杀 vendor 文件，靠根 .gitignore 否定规则兜住；新增 vendor 目录先跑 `find third_party -type f | git check-ignore --stdin` 排查

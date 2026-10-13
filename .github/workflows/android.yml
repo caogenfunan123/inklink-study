@@ -3,6 +3,7 @@ name: Android Build & Release
 on:
   push:
     branches: [ master, main ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 permissions:
@@ -163,8 +164,8 @@ jobs:
 
   release:
     needs: [ build, qqpet ]
-    # build 成功即发版；qqpet 素材未就位（skipped）或失败时照发 InkLink 双 APK
-    if: always() && needs.build.result == 'success'
+    # 仅 tag push 或手动 dispatch 发版；普通 push 只跑单测门禁与构建，不再堆积 Release 资产
+    if: always() && needs.build.result == 'success' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
 
     steps:
@@ -184,8 +185,8 @@ jobs:
     - name: Create Release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: v1.2.0-${{ github.run_number }}
-        name: "InkLink Release v1.2.0-${{ github.run_number }}"
+        tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v1.2.0-{0}', github.run_number) }}
+        name: ${{ startsWith(github.ref, 'refs/tags/') && format('InkLink {0}', github.ref_name) || format('InkLink Release v1.2.0-{0}', github.run_number) }}
         body: |
           InkLink 游戏化养成 V1.1 全量落地
           - 双时钟秒级数值引擎（前台全速/后台自动休眠：四维豁免+精力健康缓慢恢复，分属性余量）
