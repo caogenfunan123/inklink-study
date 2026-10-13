@@ -26,7 +26,18 @@
 - LFS: resources/pet 素材（约 329MB / 8058 文件）由本仓库 LFS 承载；CI 用 actions/cache
   缓存 .git/lfs（key qqpet-lfs-v1，素材更新时手工升版本号），避免每次拉满 LFS 月带宽配额
 
-## LFS 素材入库流程（沙盒出网限速 ~12KB/s，必须由所有者本地机器执行）
+## LFS 素材入库流程
+
+素材（resources/，约 347MB / 8059 文件）尚未入库时，任选其一：
+
+### 方式一：CI 代劳（推荐，零本地环境）
+
+Actions → assets-import → Run workflow。runner 会固定克隆上游
+`db7cf74f8dd0770ead920177338ba05bb6c24ec6`、拉取 LFS 实体、拷入
+`third_party/qqpet/resources/` 并用自动 `GITHUB_TOKEN`（contents: write）提交推送。
+内置守卫：文件数 >8000、抽样排除 LFS 指针残留、无变更自动跳过，可重复执行。
+
+### 方式二：所有者本地机器（备用）
 
 ```bash
 # 1. 克隆主仓（公开，代码仅 ~7MB，clone 后 resources/pet 为指针文本）
@@ -46,7 +57,7 @@ git commit -m "chore(vendor): QQPet LFS 素材入库（329MB）"
 git push origin master
 ```
 
-推送完成后 CI 的 qqpet job 自动恢复构建，tag 或手动 dispatch 时产出三 APK Release。
+入库完成后 CI 的 qqpet job 自动恢复构建，tag 或手动 dispatch 时产出三 APK Release。
 
 ## 本地手动构建 QQPet（不经 CI）
 
