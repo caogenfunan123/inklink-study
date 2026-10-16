@@ -234,6 +234,8 @@ class PetMainActivity : AppCompatActivity() {
         btnBag = findViewById(R.id.btnBag)
         btnShop = findViewById(R.id.btnShop)
         btnGames = findViewById(R.id.btnGames)
+        // 游戏入口：原生小游戏 2026-10-13 下线，QQPet 游戏厅合并当日撤回，当前无游戏内容
+        btnGames.visibility = View.GONE
         btnFriends = findViewById(R.id.btnFriends)
         btnChat = findViewById(R.id.btnChat)
         btnAdmin = findViewById(R.id.btnAdmin)
@@ -499,17 +501,6 @@ class PetMainActivity : AppCompatActivity() {
         }
         btnShop.setOnLongClickListener {
             speakGuide("商店：购买新的宠物蛋、零食和治疗药丸。")
-            true
-        }
-
-        // 游戏厅：QQPet 复刻版（third_party/qqpet 合并，WebView+Ruffle）
-        btnGames.setOnClickListener {
-            HapticUtil.tap(it)
-            speakGuide("游戏厅：QQ宠物复刻版，桌面宠物与小游戏。")
-            startActivity(android.content.Intent(this, com.inklink.host.qqpet.QQPetActivity::class.java))
-        }
-        btnGames.setOnLongClickListener {
-            speakGuide("游戏厅：QQ宠物复刻版，桌面宠物与小游戏。")
             true
         }
 

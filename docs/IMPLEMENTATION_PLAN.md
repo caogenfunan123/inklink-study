@@ -299,7 +299,6 @@ daily_stats(date, module, minutes, itemsDone, correctRate, coinsEarned, expEarne
 |---|---|---|
 | 代码+依赖(现有基线) | ~40MB | R8 混淆+资源收缩(默认开) |
 | 宠物素材(87 帧+音频；街机图已删) | ~15MB | 不动(现成) |
-| QQPet 游戏厅(vendor 素材 347MB + Ruffle wasm) | ~360MB | 2026-10-13 起合并进 app-host，超预算为既定决策（零服务器硬约束的代价）；若安装受阻再议分包 |
 | 字体:缝合怪像素(全 CJK) | 5-12MB | 子集化(fonttools 只留 3500 常用字,可压至 ~3MB) |
 | 识字数据+笔顺 JSON(3400 字) | 8-20MB | 笔顺只打包 L1-L3 的 1200 字(L4 字不描红只认读) |
 | 古诗音频 114 首 mp3 | 20-30MB | 重编码 64kbps 单声道(儿童朗读够用,约减半) |

@@ -156,9 +156,9 @@ sequenceDiagram
 - **成长**：升级经验 = level*100；CUB(≤1)→JUVENILE(2)→ADOLESCENT(4)→ADULT(5+)，成年按行为定型 finalForm（学习多 STUDIOUS / playfulness≥30 PLAYFUL / health<50 DROOPY / 否则 BALANCED）。
 - **衰减**：`PetDecayEngine` 双时钟（前台 PetClock.foreground 由 onResume/onPause 翻转）+ 分属性浮点余量模型防丢帧；前台佛系（饱食 16h/开心 23h/精力 20h/清洁 32h 掉光），后台自动休眠四维豁免、精力/健康 ÷20 恢复；hunger<20 或 clean<20 时 health 每 90s -1。
 - **生命闭环 V1.2**：health=0 → 虚弱沉睡（可 heal 复活）；超 24h 宽限 → 离世归档 Memorial 纪念册；rebirth() 全新宠物资产归零、纪念册保留。
-- **经济**：金币入账唯一入口 `PetStateManager.addReward(coin, exp, reason)`；消耗=商店（7 道具/21 物种/4 装饰/3 场景，cat 初始免费、最贵 270 币）；每日目标（喂2玩1洗1）奖 60 币；随机事件 60s roll（55% 正向）；GPS 寻宝（80m 位移+60s 冷却）。原生单机小游戏奖励（猜拳/翻牌/转盘每日前 8 局）随游戏下线移除，游戏内容改由 QQPet 游戏厅承载（其内部经济独立，见 6.4）。
+- **经济**：金币入账唯一入口 `PetStateManager.addReward(coin, exp, reason)`；消耗=商店（7 道具/21 物种/4 装饰/3 场景，cat 初始免费、最贵 270 币）；每日目标（喂2玩1洗1）奖 60 币；随机事件 60s roll（55% 正向）；GPS 寻宝（80m 位移+60s 冷却）。（原生单机小游戏奖励随 2026-10-13 游戏下线移除，未再引入替代游戏内容）
 - **互动**：六动作（feed/playWith/learn/cleanPet/toggleSleep/heal）+ 手势（touch/longPress/annoy）；远程 31/23 指令共用 `handleInteractCore` 防双扣；Buff（energy/mood）即时改值 + 对应属性 10 分钟暂停衰减。
-- **表现层**：`PetSpriteView` 部件化像素引擎（96x96，两级回退：PIXEL_PNG → 程序化像素；arcade 帧图档 2026-10-13 随单机游戏下线移除）；`PetAiEngine` 行为树 8-20s 决策；音效三级隔离（RawSoundPlayer 预制 wav / SoundEffectManager chiptune 合成 / SirenManager 告警）；TTS 走 PetTtsGate 进程单例门控。
+- **表现层**：`PetSpriteView` 部件化像素引擎（96x96，两级回退：PIXEL_PNG → 程序化像素；arcade 帧图档随 2026-10-13 单机游戏下线移除）；`PetAiEngine` 行为树 8-20s 决策；音效三级隔离（RawSoundPlayer 预制 wav / SoundEffectManager chiptune 合成 / SirenManager 告警）；TTS 走 PetTtsGate 进程单例门控。
 
 ### 6.3 学习乐园（app-host 原生，家长端简报只读）
 
@@ -168,13 +168,6 @@ sequenceDiagram
 - **护眼防沉迷**（`SystemClock.elapsedRealtime` 计时防改钟）：连续 20 分钟强制休息页 5 分钟（back 键吞掉）；每日 40 分钟上限（可家长调整，当前为固定值）；21:00-6:00 夜禁；金币日上限 150。
 - **资产**：`assets/learning/` 6 个 JSON（hanzi 3024 字 / poems 114 首 / pinyin 474 音节+250 配对题 / english 2 个未接线）；由 `tools/learning/build_learning_assets.py` 从 3 个参考仓库生成。
 - **家长侧现状**：47 码 → `ControllerState.learnSummaryByDevice` 内存一行简报（Dashboard 展示）；48/49 作业载荷协议已定义、主控端零消费（M3 待开发）。
-
-### 6.4 QQPet 游戏厅（app-host 内嵌 vendor，2026-10-13 合并）
-
-- **形态**：`qqpet/` 包两个全屏 Activity（竖屏大厅 / 横屏小游戏）+ 一个 WebViewClient，页面为上游 vite 产物，Ruffle（wasm）播放 SWF，素材与页面全部从 APK assets 经虚拟 origin Serve，零网络依赖
-- **隔离**：存档 `filesDir/save.json` 与 InkLink 宠物状态零交集；游戏厅内元宝/成长经济与 `addReward` 永不互通
-- **契约**：`window.QQPetNative` 桥（14 方法）唯一定义在 `third_party/qqpet/src/android/bridge.ts`，实现方为 `QQPetActivity`；悬浮窗四方法（setFocusable/setAutoStart/setTray/setBounds）打桩——上游悬浮窗生态刻意不移植
-- **上游**：vendor 自 AnkioTomas/qqpet（`third_party/qqpet/`，含腾讯素材，仅个人学习）；详细设计见 `模块/qqpet-游戏厅.md`
 
 ## 7. 消息协议（勿改动编号）
 
@@ -200,7 +193,7 @@ sequenceDiagram
 | 端 | 存储 | 内容 |
 |----|------|------|
 | app-host | Room `inklink_pet.db`（v2，允许主线程查询 + 破坏性迁移） | pet_bag(整包JSON单行)、event_log(环形500)、learn_progress(主键 module+itemId)、wrong_book、daily_stats(主键 date+module) |
-| app-host | JSON 文件 | friends.json、task_list.json(上限20)、offline_events.json(上限50)、qqpet/save.json（游戏厅存档，与宠物状态隔离） |
+| app-host | JSON 文件 | friends.json、task_list.json(上限20)、offline_events.json(上限50) |
 | app-host | EncryptedSharedPreferences | PIN 加盐哈希、锁定时间戳 |
 | app-controller | SharedPreferences | inklink_devices(设备列表JSON)、inklink_controller(pairingKey/ablyKey/TTS开关) |
 | app-controller | 无 Room | 学习简报仅内存，清 App 即失（与宠物数据同命，见 IMPLEMENTATION_PLAN 风险项） |
@@ -228,16 +221,14 @@ sequenceDiagram
 |--------|------|------|
 | M1 | 资产管线 + 识字屋 + 协议 47 + 家长简报 | 已交付 |
 | M2 | 拼音森林/口算商店/古诗亭/复习谷/错题本/护眼防沉迷/舒尔特方格（三岛全原生，WebView 退役） | 已交付 |
-| QQPet 合并 | vendor 游戏厅并入 app-host（LFS 素材入库 + CI 链改造 + 原生小游戏下线） | 已交付 2026-10-13 |
 | M3 | 家长作业布置(48/49 UI)/学习报告页/习惯打卡/英语字母岛(26字母卡+191词闪卡) | 未开工 |
 | 后置 | 笔顺描红(hanzi-writer 已删待后置)/绘本/自然拼读/儿歌/圆屏适配 | 未开工 |
 
 ## 11. 测试与 CI
 
 - 单测分布：common 9 类（协议往返/SoundProtocol 契约/围栏去抖/坐标转换/幂等/单调节流）、app-host 5 类（衰减引擎/游戏化内核/生命闭环/精灵资产契约/音效契约；街机资产契约随游戏下线删除）、app-controller 2 类（状态聚合/设备仓库）。
-- 盲区：learning 包、InkForegroundService 路由、security/friend/task/queue、qqpet 包无单测。
-- CI（`.github/workflows/android.yml`）：push master/main 触发，JDK 17 temurin，先三类单测门禁再 `assembleRelease`，产物 APK 发布到 GitHub Release（tag `v1.2.0-<run_number>`）；密钥经 GitHub Secrets 注入。
-- CI 内游戏厅链：恢复 LFS 缓存 → checkout 跳过 smudge → `git lfs pull` + 素材就位守卫（缺失硬失败）→ Node 22 `npm ci` + typecheck + `build:android-web` → Gradle 将 vite 产物与 LFS 素材合并进 app-host assets；`qqpet` job 已退役（独立 QQPet APK 不再构建）。
+- 盲区：learning 包、InkForegroundService 路由、security/friend/task/queue 无单测。
+- CI（`.github/workflows/android.yml`）：push master/main 触发，JDK 17 temurin，先 `:app-host:testDebugUnitTest` 门禁再 `assembleRelease`，产物为未签名 APK 发布到 GitHub Release（tag `v1.2.0-<run_number>`）；密钥经 GitHub Secrets 注入。
 - 注意：app-controller 的单测不在 CI 门禁内（见 CHECKLIST_PET_AUDIO「故意不做」项）。
 
 ## 12. 相关文档

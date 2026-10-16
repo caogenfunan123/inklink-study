@@ -14,46 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Restore qqpet LFS cache
-      id: lfscache
-      # 缓存 .git/lfs 避免每次跑满 LFS 月带宽配额；素材更新后手工升级 key 为 v2、v3……
-      uses: actions/cache/restore@v4
-      with:
-        path: .git/lfs
-        key: qqpet-lfs-v1
-        restore-keys: qqpet-lfs-
-
     - name: Checkout
       uses: actions/checkout@v4
-      env:
-        # LFS 对象先走缓存+lfs pull，跳过 checkout 时 smudge
-        GIT_LFS_SKIP_SMUDGE: '1'
-
-    - name: Pull LFS assets
-      run: git lfs pull
-
-    - name: Guard LFS assets ready
-      run: |
-        # QQPet 游戏厅已合并进 app-host（assets.srcDirs 指向 third_party/qqpet/resources），
-        # 素材缺失会产出残废 APK，必须硬失败而不是放过
-        if [ ! -d third_party/qqpet/resources/pet ] || \
-           grep -rl --include="*.swf" -m1 "^version https://git-lfs" third_party/qqpet/resources/pet >/dev/null 2>&1; then
-          echo "::error::third_party/qqpet/resources/pet LFS 素材未就位，游戏厅构建中止（跑 assets-import 工作流入库）"
-          exit 1
-        fi
-
-    - name: Set up Node 22
-      uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: npm
-        cache-dependency-path: third_party/qqpet/package-lock.json
-
-    - name: Build QQPet web assets
-      # 游戏厅 vite 产物（index/game/swf.html + ruffle/）进 app-host assets；
-      # 构建产物不入库，每次 CI 重新生成（与上游 build:android-web 同命令）
-      working-directory: third_party/qqpet
-      run: npm ci && npm run typecheck && npm run build:android-web
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -89,7 +51,6 @@ jobs:
         if-no-files-found: ignore
 
     - name: Build APKs
-      # app-host 现含 QQPet 游戏厅（vite 产物 + LFS 素材 ~347MB），APK 约 360MB
       env:
         ORG_GRADLE_PROJECT_ABLY_KEY: ${{ secrets.ABLY_KEY }}
         ORG_GRADLE_PROJECT_TENCENT_MAP_KEY: ${{ secrets.TENCENT_MAP_KEY }}
@@ -111,14 +72,6 @@ jobs:
         name: inklink-apks
         path: dist/*.apk
         if-no-files-found: error
-
-    - name: Save qqpet LFS cache
-      # 仅在 LFS 对象拉全后保存；key 已存在时 save 只告警不失败（幂等）
-      if: steps.lfscache.outputs.cache-hit != 'true'
-      uses: actions/cache/save@v4
-      with:
-        path: .git/lfs
-        key: qqpet-lfs-v1
 
   release:
     needs: [ build ]
@@ -146,8 +99,6 @@ jobs:
           - AI 行为树（状态抱怨 + 性格加权自主行为 + 情绪台词气泡）
           - 随机事件 / 冒险日记 / 里程碑成就 / 每日目标
           - 三类远程礼物（道具/Buff/装饰）+ 零花钱、43 串门/逗弄子类型、赠礼 ACK
-          - QQPet 游戏厅合并进 InkLink-Host（third_party/qqpet vendor，WebView+Ruffle；
-            含腾讯 QQ 宠物素材，仅限个人学习，请勿分发）
         files: dist/*.apk
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,7 +1,6 @@
 # app-host 孩子端（受控端）
 
-孩子端三合一：电子宠物养成 + 学习乐园 + QQPet 游戏厅 + 家长管控受控侧。全业务由前台服务统一托管，约 13400 行 Kotlin（含测试）。
-
+孩子端三合一：电子宠物养成 + 学习乐园 + 家长管控受控侧。全业务由前台服务统一托管，约 13000 行 Kotlin（含测试）。
 ## 结构
 
 ```
@@ -17,7 +16,7 @@ app-host/src/main/java/com/inklink/host/
 │   ├── PetDecayEngine.kt    # 双时钟衰减 + 浮点余量防丢帧 + 后台休眠豁免
 │   ├── PetClock.kt          # 前后台时钟翻转（onResume/onPause 驱动）
 │   ├── PetCatalog.kt        # 商品唯一数据源：21物种/7道具/4装饰/3场景/每日目标
-│   ├── PetSceneMap.kt / PetSpriteResMap.kt  # 素材映射+三级回退
+│   ├── PetSceneMap.kt / PetSpriteResMap.kt  # 素材映射+两级回退（PIXEL_PNG → 程序化）
 │   ├── GpsTreasureHunter.kt # GPS寻宝（80m位移+60s冷却）
 │   └── HostScreenState.kt   # Service↔UI 共享状态 + 画面缓存自愈
 ├── pet/PetAiEngine.kt       # 行为树：8-20s决策 虚弱>睡眠>抱怨>性格动作>待机
@@ -35,17 +34,14 @@ app-host/src/main/java/com/inklink/host/
 ├── receiver/                # BootReceiver(开机)/AlarmReceiver(60s自愈)/
 │                            # PetWakeupReceiver(4h促活)/TaskPlayActionReceiver(通知播任务)
 ├── ui/
-│   ├── PetMainActivity.kt   # 1918行 Launcher：HUD/手势/五按钮/商店4tab/游戏厅/
+│   ├── PetMainActivity.kt   # 1918行 Launcher：HUD/手势/按钮/商店4tab/
 │   │                        # 背包/好友/聊天/学习入口/家长后台入口
+│   │                        # （游戏入口 btnGames 2026-10-13 起 GONE 隐藏，无游戏内容）
 │   ├── HostActivity.kt      # 462行 家长管控后台：二维码/投屏/响铃/传输模式切换
 │   ├── ChatActivity.kt / FriendActivity.kt
 │   ├── learning/            # 8个原生学习 Activity（无 WebView）
 │   └── view/                # PetSpriteView(1462行像素引擎)/PixelSpecies/
 │                            # PixelProgressBarView
-├── qqpet/                   # QQPet 游戏厅（详见 qqpet-游戏厅.md）
-│   ├── QQPetActivity.kt     # 211行 大厅页 + QQPetNative 全桥 + gamePlayed 上报
-│   ├── QQPetGameActivity.kt # 60行 小游戏全屏（横屏，Ruffle 播放 SWF）
-│   └── QQPetAssetClient.kt  # 112行 虚拟 origin 从 APK assets Serve 页面+素材
 └── util/                    # SoundEffectManager(ToneGenerator chiptune)/HapticUtil
 ```
 
@@ -56,9 +52,7 @@ app-host/src/main/java/com/inklink/host/
 | `service/InkForegroundService.kt` | 一切业务结算与消息路由的归属地；改消息处理先看 route 分发块 |
 | `state/PetStateManager.kt` | 宠物数值唯一写入口；addReward/六动作/衰减 settle |
 | `learning/LearningManager.kt` | 学习域唯一入口；finishLesson 结算 + 艾宾浩斯 + 护眼 |
-| `ui/view/PetSpriteView.kt` | 宠物渲染；素材回退链（PIXEL_PNG → 程序化；arcade 档 2026-10-13 随单机游戏下线移除） |
-| `qqpet/QQPetActivity.kt` | 游戏厅主页与桥实现；契约改 `bridge.ts` 时必须同步 |
-| `qqpet/QQPetAssetClient.kt` | 虚拟 origin 资产 Serve；SWF 大小写映射/高清 SVG 在此 |
+| `ui/view/PetSpriteView.kt` | 宠物渲染；素材两级回退链（PIXEL_PNG → 程序化；arcade 档已随游戏下线移除） |
 | `data/PetDatabase.kt` | Room v2；加表须升版本（当前破坏性迁移策略） |
 
 ## 依赖
@@ -73,7 +67,6 @@ app-host/src/main/java/com/inklink/host/
 - 保活：前台服务类型按已授权限动态组合（MICROPHONE/LOCATION，全未授权兜底 DATA_SYNC），Android 14 兼容
 - 素材契约测试（PNG/WAV）在 src/test，改资产必跑
 - 单测 5 类：PetDecayEngineTest/PetGamifyKernelTest/PetLifeLoopTest/PetSpriteAssetContractTest/RawSoundContractTest
-- 游戏厅隔离红线：qqpet/ 包不读不写 InkLink 宠物状态（SharedPreferences/Room），其内经济（元宝/成长）与 addReward 永不互通
 
 ## 添加新文件
 

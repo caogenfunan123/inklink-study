@@ -181,8 +181,3 @@ captures/
 *.lzma
 *.iso
 
-# Vendored QQPet (third_party/qqpet) 覆盖：上游 gradle wrapper 与构建资源必须入库
-!third_party/qqpet/android/gradlew
-!third_party/qqpet/android/gradlew.bat
-!third_party/qqpet/android/gradle/wrapper/gradle-wrapper.jar
-!third_party/qqpet/build/

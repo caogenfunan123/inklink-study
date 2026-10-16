@@ -38,20 +38,6 @@ android {
         buildConfigField("String", "ABLY_KEY", "\"$ablyKey\"")
     }
 
-    // QQPet 游戏厅（third_party/qqpet 合并）：vite 产物 + 上游素材一并进 APK assets。
-    // out/android 由 CI/本地 `npm run build:android-web` 生成（构建产物不入库）；
-    // resources 为 LFS 素材（需 git lfs pull 后为实体文件）。
-    sourceSets {
-        getByName("main") {
-            assets.srcDirs("src/main/assets", rootDir.resolve("third_party/qqpet/out/android"), rootDir.resolve("third_party/qqpet/resources"))
-        }
-    }
-
-    androidResources {
-        // 已压缩媒体直接打包；wasm 从流中编译（Ruffle）。与 qqpet 上游壳一致。
-        noCompress += listOf("swf", "png", "gif", "jpg", "mp3", "wasm")
-    }
-
     buildFeatures {
         buildConfig = true
     }
